@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Echo</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationIcon>../../assets/brand/echo.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Echo.Core/Echo.Core.csproj" />
+    <Resource Include="../../assets/brand/echo-emblem.png" Link="Assets/echo-emblem.png" />
+    <Compile Include="../Echo.Recorder/MediaTools.cs" Link="Services/MediaTools.cs" />
+  </ItemGroup>
+</Project>

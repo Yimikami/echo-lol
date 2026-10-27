@@ -1,0 +1,9 @@
+{
+  "generator": "OpenAI built-in image_gen",
+  "prompt": "Use case: logo-brand. Create a single distinctive app emblem for Echo, a lightweight League of Legends gameplay recorder. Icon only, NO text or letters. Two precise interlocking angular echo ribbons form a forward-facing play aperture and an open bookmark cut, suggesting a saved moment returning. Premium restrained geometric identity, flat vector-like shapes with exceptionally clean edges, seafoam mint and warm off-white, tiny warm coral accent if useful. Strong silhouette readable at 24 pixels; centered with ample transparent padding. Avoid microphone, headphones, equalizer, gamepad, shield, Riot or League logos, gradients, glow, shadows, mockups, backgrounds. Transparent background. One standalone emblem, not a sheet of variations.",
+  "date": "2026-10-27",
+  "asset": "echo-emblem.png",
+  "derived": {
+    "echo.ico": "Format conversion with FFmpeg, 256×256. No source image modification."
+  }
+}
