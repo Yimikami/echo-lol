@@ -37,6 +37,6 @@ The analysis script defines 1% low FPS as `1000 / mean(slowest 1% frame interval
 - UI timers stop when its process exits; exports do not compete with active recording.
 - Fullscreen display masking checks foreground process immediately before each OBS frame composition. Display overlays and focus-transition behavior remain acceptance items.
 
-Live gameplay measurements: **not yet available**.
+Live paired gameplay measurements: **not established**. One partial baseline was collected before a capture-transition error interrupted the comparison. It is excluded from conclusions. The user subsequently cancelled formal FPS testing in favor of normal-use feedback; no further benchmark was started.
 
 The local PresentMon permission probe failed with Windows access denied. Collecting gameplay frame times requires the user to approve an elevated measurement process or use an account already permitted to trace performance events. No Windows group membership, security setting or game configuration was changed.

@@ -35,6 +35,7 @@ def analyze(path):
     values = sorted(max(chains.values(), key=len))
     worst = values[-max(1, math.ceil(len(values) * 0.01)):]
     return {"file": Path(path).name, "frames": len(values), "average_fps": 1000 / statistics.mean(values),
+            "observed_frame_time_seconds": sum(values) / 1000,
             "one_percent_low_fps": 1000 / statistics.mean(worst), "p95_frame_ms": percentile(values, 95),
             "p99_frame_ms": percentile(values, 99), "definition": "1% low = 1000 / mean of slowest 1% frame intervals"}
 
