@@ -6,6 +6,13 @@
     "conversion": "Unmodified SVG path data to WPF PathGeometry",
     "license": "assets/licenses/Phosphor-LICENSE.txt"
   },
+  "overlayFont": {
+    "family": "Bebas Neue",
+    "source": "https://github.com/google/fonts/tree/main/ofl/bebasneue",
+    "original_sha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
+    "conversion": "Unmodified TTF; glyph outlines shared by WPF playback and ASS video export",
+    "license": "assets/licenses/BebasNeue-OFL.txt"
+  },
   "font": {
     "family": "Manrope",
     "source": "https://github.com/google/fonts/tree/main/ofl/manrope",

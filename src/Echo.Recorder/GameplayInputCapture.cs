@@ -95,7 +95,7 @@ internal sealed class GameplayInputCapture : IDisposable
                         else if (vk == 27 && !up) _chat = false;
                         else if (!_chat)
                         {
-                            var key = vk switch { 16 or 160 or 161 => "Shift", 17 or 162 or 163 => "Ctrl", 18 or 164 or 165 => "Alt", 32 => "Space", 9 => "Tab",8=>"Backspace",20=>"Caps",37=>"Left",38=>"Up",39=>"Right",40=>"Down",>=112 and <=123=>"F"+(vk-111), >= 48 and <= 90 => ((char)vk).ToString(), _ => "" };
+                            var key = vk switch { 16 or 160 or 161 => "Shift", 17 or 162 or 163 => "Ctrl", 18 or 164 or 165 => "Alt", 32 => "Space", 9 => "Tab",8=>"Backspace",192=>"Backtick",20=>"Caps",37=>"Left",38=>"Up",39=>"Right",40=>"Down",>=112 and <=123=>"F"+(vk-111), >= 48 and <= 90 => ((char)vk).ToString(), _ => "" };
                             Write(key, !up);
                         }
                     }

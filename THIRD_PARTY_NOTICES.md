@@ -14,6 +14,10 @@ Phosphor Core regular icons are copyright Phosphor Icons and licensed MIT. Exact
 
 Manrope is copyright the Manrope Project Authors and licensed SIL OFL 1.1. The original Google Fonts variable font is retained in `assets/font-source/`; 400/500/600/700 static instances are embedded in the UI. See `assets/licenses/Manrope-OFL.txt`, `assets/design-provenance.json` and https://github.com/google/fonts/tree/main/ofl/manrope. No system-wide font installation is required.
 
+Bebas Neue is copyright © 2010 Dharma Type, licensed SIL OFL 1.1. The unmodified font is embedded for input-overlay lettering. See `assets/licenses/BebasNeue-OFL.txt` and https://github.com/google/fonts/tree/main/ofl/bebasneue. Keyboard and mouse contours are original vector artwork, inspired by the user's visual references; no input-overlay project code or texture atlas is incorporated.
+
+The settings gameplay preview is a frame from Riot Games' official League of Legends “How to Play” / “Earn Gold” video, copyright Riot Games. It is used only as a positioning reference and is not covered by Echo's source-code license. Source URL, timestamp and checksum are retained in `assets/brand/game-preview-provenance.json`.
+
 .NET and WPF are Microsoft projects under the MIT license. This initial package is framework-dependent and requires the .NET 10 Desktop Runtime.
 
 Echo isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.

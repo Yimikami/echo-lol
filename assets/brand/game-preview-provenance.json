@@ -1,0 +1,13 @@
+{
+  "asset": "game-preview.png",
+  "kind": "real gameplay video frame",
+  "owner": "Riot Games",
+  "source_page": "https://www.leagueoflegends.com/en-us/how-to-play/",
+  "source_media": "https://cmsassets.rgpub.io/sanity/files/dsfx7636/news/9b52333c4284f3e8e95a36981ba76c11820e0ac5.webm",
+  "section": "Power Up Your Champ — Earn Gold",
+  "timestamp_seconds": 2,
+  "conversion": "FFmpeg single-frame PNG extraction; no generated or composited game artwork",
+  "sha256": "25e89a86bae9dc3e43418ca879b439dcd7f00c70c58a0dcdba43e69c88f8c895",
+  "use": "Settings-only input overlay placement reference",
+  "copyright": "Riot Games. Not covered by Echo's GPL source-code license."
+}

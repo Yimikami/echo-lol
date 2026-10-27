@@ -61,6 +61,7 @@ public partial class MainWindow : Window
         Timeline.SeekRequested += SeekTo;
         Timeline.MomentRequested += t => { SeekTo(Math.Max(Timeline.SelectionStart, t - 3)); SetPlaying(true); };
         Timeline.RangeChanged += (_, _) => UpdateRange();
+        InputPlacementPreview.PlacementChanged += preset => { _inputPreset=preset; PersistInputPreset(); };
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
         _timer.Tick += (_, _) => Tick(); _timer.Start();
         Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
@@ -512,6 +513,7 @@ public partial class MainWindow : Window
     private void ShowSettingsCategory(string category)
     {
         _settingsCategory = category;
+        if(category=="Inputs")InputPlacementPreview.LoadBackground();
         foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
         foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory,InputsCategory })
         {

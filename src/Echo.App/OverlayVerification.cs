@@ -14,6 +14,17 @@ internal static class OverlayVerification
     internal static async Task Run(HostPaths paths)
     {
         var checks=new List<string>();void Check(string name,bool value){if(!value)throw new Exception(name);checks.Add("PASS "+name);}
+        File.WriteAllText(Path.Combine(paths.Root,"font-identity.txt"),OverlayArtwork.FontIdentity);
+        Check("overlay lettering resolves the bundled Bebas Neue face",OverlayArtwork.FontIdentity.StartsWith("Bebas Neue|",StringComparison.Ordinal));
+        var preview = new Canvas{Width=1184,Height=440,Background=new SolidColorBrush(Color.FromRgb(37,40,45))};
+        foreach(var item in new[]{("Full",20d,24d,704d),("Compact",744d,78d,420d)})
+        {
+            var control=new Controls.InputOverlay{Preset=new(){Layout=item.Item1,Style="Outline",ShowApm=false},Width=item.Item4};control.Height=control.Width/control.Aspect;
+            Canvas.SetLeft(control,item.Item2);Canvas.SetTop(control,item.Item3);preview.Children.Add(control);
+        }
+        await Render(preview,Path.Combine(paths.Root,"reference-style.png"),new(1184,440));
+        Check("wireframe artwork uses frozen vector contours",OverlayArtwork.Get("Full").Parts.All(p=>p.Fill.IsFrozen&&p.Outline.IsFrozen));
+        Check("mouse regions have separate button contours",OverlayArtwork.Get("Compact").Parts.Count(p=>p.Control?.StartsWith("Mouse")==true)==5);
         var folder=Path.Combine(paths.Root,"recordings","fixture");Directory.CreateDirectory(folder);var video=Path.Combine(folder,"source.mp4");var log=Path.Combine(folder,"inputs.jsonl");
         if(!File.Exists(video))MediaTools.Run("ffmpeg",["-hide_banner","-v","error","-n","-f","lavfi","-i","testsrc2=size=640x360:rate=30:duration=4","-f","lavfi","-i","sine=frequency=440:duration=4","-c:v","h264_nvenc","-preset","p3","-c:a","aac",video]);
         InputSample[] samples=[new(.2,"Q",true),new(.8,"Q",false),new(1,"MouseRight",true),new(1.5,"MouseRight",false)];File.WriteAllLines(log,samples.Select(s=>JsonSerializer.Serialize(s)));
@@ -52,7 +63,20 @@ public partial class MainWindow
         CollapsePlaybackInputs(this,new());check("overlay can collapse and expand",_inputPreset.Collapsed&&PlaybackInputs.Aspect>5);CollapsePlaybackInputs(this,new());
         _inputPreset=_inputPreset with{Layout="Full",Style="Outline"};PersistInputPreset();check("layout and style persist for every clip",_paths.LoadSettings().InputOverlay.Layout=="Full"&&_paths.LoadSettings().InputOverlay.Style=="Outline");
         await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"player-overlay.png"),new(1480,920));
-        SettingsClick(this,new());ShowSettingsCategory("Inputs");await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"input-settings.png"),new(1100,720));check("input settings have their own category",InputSettings.Visibility==Visibility.Visible&&RecordingSettings.Visibility==Visibility.Collapsed);
+        SettingsClick(this,new());ShowSettingsCategory("Inputs");await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"input-settings.png"),new(1480,1100));check("input settings have their own category",InputSettings.Visibility==Visibility.Visible&&RecordingSettings.Visibility==Visibility.Collapsed);
+        var placement=InputPlacementPreview;
+        check("game preview uses a 16:9 frame",placement.ActualWidth>0&&Math.Abs(placement.ActualWidth/placement.ActualHeight-16d/9)<.01);
+        var expectedWidth=placement.Preset.Width-45/placement.ActualWidth;
+        placement.MoveTo(new Point(placement.ActualWidth*.22,placement.ActualHeight*.32));placement.ResizeBy(-45);placement.Commit();
+        var saved=_paths.LoadSettings().InputOverlay;
+        check("pre-game placement saves position and size",Math.Abs(saved.X-.22)<.001&&Math.Abs(saved.Y-.32)<.001&&Math.Abs(saved.Width-expectedWidth)<.001);
+        check("free placement is labelled custom",InputPositionBox.SelectedIndex==4);
+        check("settings preview and normal playback share a preset",PlaybackInputs.Preset==saved&&placement.Preset==saved);
+        placement.MoveTo(new Point(placement.ActualWidth*2,placement.ActualHeight*2));placement.Commit();
+        check("pre-game drag stays inside the video",saved.X<placement.Preset.X&&placement.Preset.X<1&&placement.Preset.Y<1);
+        _inputPreset=saved;PersistInputPreset();
+        await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"input-settings.png"),new(1480,1100));
+        await OverlayVerification.Render(placement,Path.Combine(output,"placement-preview.png"),new(placement.ActualWidth,placement.ActualHeight));
     }
 }
 public partial class OnboardingWindow

@@ -16,7 +16,7 @@ public static class GameplayInputs
         new("A","A",12,156),new("S","S",50,156),new("B","B",88,156),new("X","X",126,156),new("C","C",164,156),new("G","G",202,156),new("H","H",240,156),new("WheelUp","+",292,156),new("WheelDown","−",330,156),
         new("P","P",12,194),new("T","T",50,194),new("V","V",88,194),new("Y","Y",126,194),new("Tab","TAB",164,194,108)
     ];
-    public static readonly HashSet<string> Allowed = Keys.Select(k=>k.Id).Concat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".Select(c=>c.ToString())).Concat(Enumerable.Range(1,12).Select(n=>"F"+n)).Concat(new[]{"Backspace","Caps","Left","Right","Up","Down"}).ToHashSet(StringComparer.Ordinal);
+    public static readonly HashSet<string> Allowed = Keys.Select(k=>k.Id).Concat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".Select(c=>c.ToString())).Concat(Enumerable.Range(1,12).Select(n=>"F"+n)).Concat(new[]{"Backspace","Backtick","Caps","Left","Right","Up","Down"}).ToHashSet(StringComparer.Ordinal);
     public static List<InputSample> Read(string? path)
     {
         var result = new List<InputSample>();

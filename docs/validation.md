@@ -48,6 +48,7 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 Update the ledger with actual evidence as checks complete; do not convert a pending row into a pass based on code inspection alone.
 
 ## Playback overlays and setup
-- 23 controlled checks passed: three layout exports with decoded A/V and original SHA-256 preservation; ordinary-player visibility, timed key state, saved drag/resize, collapse/expand, preset persistence, five onboarding steps, Skip defaults, settings choices and light theme.
+- 31 controlled checks passed on the reference-style overlay revision: bundled font resolution, frozen keyboard/mouse contours, three decoded video exports with original SHA-256 preservation, player input state and placement, pre-game drag/resize persistence and bounds, shared player/settings presets, onboarding and themes. The settings preview uses a real frame from Riot's official tutorial; it is loaded only when the Input overlay category opens.
+- The same package passed 67 core checks and 45 offscreen UI checks at 1480px and 1100px widths. These exercise layout and handlers, not live mouse interaction or gameplay acceptance.
 - Exit Echo was exercised through the same durable exit request used by the tray. An isolated paused UI/supervisor/worker group went from three processes to zero and did not respawn. No game recording or key injection was used.
 - APM counts observed presses in the trailing 60 seconds. Old recordings show idle keys and an unavailable APM value. New input recording, chat suppression and Vanguard behavior still need live gameplay acceptance.

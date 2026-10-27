@@ -21,8 +21,10 @@ public partial class MainWindow
     private InputOverlayPreset ReadOverlayFields()=>_inputPreset with{Enabled=InputVisibleBox.IsChecked==true,ShowApm=InputApmBox.IsChecked==true,Layout=InputLayoutBox.SelectedIndex==1?"Full":InputLayoutBox.SelectedIndex==2?"Mouse":"Compact",Style=InputStyleBox.SelectedIndex==1?"Light":InputStyleBox.SelectedIndex==2?"Outline":"Dark",Width=InputSizeSlider.Value};
     private void RefreshOverlayPreview()
     {
-        InputStylePreview.Preset=_inputPreset;InputStylePreview.HasData=true;InputStylePreview.Apm=120;InputStylePreview.Held=["Q","MouseRight"];
-        InputStylePreview.Width=Math.Min(430,220*InputStylePreview.Aspect);InputStylePreview.Height=InputStylePreview.Width/InputStylePreview.Aspect;InputStylePreview.InvalidateVisual();
+        InputPlacementPreview.SetPreset(_inputPreset);
+        var updating=_updating;_updating=true;
+        InputPositionBox.SelectedIndex=Enumerable.Range(0,4).FirstOrDefault(index => { var corner=OverlayCorner(index); return Math.Abs(_inputPreset.X-corner.X)<.001&&Math.Abs(_inputPreset.Y-corner.Y)<.001; },4);
+        _updating=updating;
     }
     private void LoadInputData(ClipItem item){_inputSamples=GameplayInputs.Read(item.Session.InputLogPath);UpdatePlaybackInputs(item.Clip.Start);}
     private Rect VideoBounds()
@@ -72,8 +74,14 @@ public partial class MainWindow
     private void InputSizeChanged(object sender,RoutedPropertyChangedEventArgs<double> e){if(_overlayReady&&!_updating)AutoSave(false);}
     private void InputPositionChanged(object sender,SelectionChangedEventArgs e)
     {
-        if(!_overlayReady||_updating)return;var layout=OverlayAppearance.Layout(_inputPreset.Layout);var width=_inputPreset.Width;var height=width*layout.Height/layout.Width*16/9;var index=InputPositionBox.SelectedIndex;
-        _inputPreset=_inputPreset with{X=index is 1 or 3?Math.Max(.02,.98-width):.02,Y=index<2?Math.Max(.02,.98-height):.02};PersistInputPreset();
+        if(!_overlayReady||_updating||InputPositionBox.SelectedIndex is <0 or >3)return;
+        var point=OverlayCorner(InputPositionBox.SelectedIndex);_inputPreset=_inputPreset with{X=point.X,Y=point.Y};PersistInputPreset();
+    }
+    private Point OverlayCorner(int index)
+    {
+        var layout=OverlayAppearance.Layout(_inputPreset.Layout);var aspect=layout.Width/(double)(_inputPreset.Collapsed?38:layout.Height);
+        var width=Math.Min(_inputPreset.Width,aspect*9/16);var height=width/aspect*16/9;
+        return new(index is 1 or 3?Math.Max(0,.98-width):.02,index<2?Math.Max(0,.98-height):.02);
     }
     private void RunSetupClick(object sender,RoutedEventArgs e){new OnboardingWindow(_paths){Owner=this}.ShowDialog();_settings=_paths.LoadSettings();_updating=true;LoadSettingsFields();_updating=false;UpdatePlaybackInputs(Player.Position.TotalSeconds);}
 }
