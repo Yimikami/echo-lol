@@ -31,12 +31,18 @@ public sealed record EchoSettings
     public bool CaptureAssists { get; init; } = true;
     public bool CaptureDeaths { get; init; } = true;
     public bool RemoveMaskedHighlights { get; init; } = true;
+    public bool RecordInputs { get; init; }
+    public InputOverlayPreset InputOverlay { get; init; } = new();
+    public string Theme { get; init; } = "Dark";
+    public bool SetupCompleted { get; init; }
     public string ManualShortcut { get; init; } = "Ctrl+Shift+F8";
     public long MinimumFreeMegabytes { get; init; } = 2048;
     public string Encoder { get; init; } = "auto";
 
     public void Validate()
     {
+        InputOverlay.Validate();
+        if (Theme is not ("Dark" or "Light" or "System")) throw new ArgumentException("Choose a supported theme.");
         _ = ShortcutGesture.Parse(ManualShortcut);
         if (!Enum.IsDefined(Mode)) throw new ArgumentException("Unknown recording mode.");
         if (!Enum.IsDefined(CaptureMethod)) throw new ArgumentException("Unknown capture method.");
@@ -96,6 +102,8 @@ public sealed record Session
     public List<TimeRange> MaskedRanges { get; set; } = [];
     public EchoSettings? RecordingOptions { get; set; }
     public bool PreparationPending { get; set; }
+    public string? InputLogPath { get; set; }
+    public string? InputError { get; set; }
 }
 
 public sealed record RecorderStatus

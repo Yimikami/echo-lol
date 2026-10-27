@@ -108,6 +108,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         detector.Consume(initial, initialTime, 0, baseline: true);
         using var engine = new ObsEngine();
         var clock = new Stopwatch(); var masking = new MaskTimeline(); long recordingOriginTicks = 0;
+        GameplayInputCapture? inputs = null;
         try
         {
             CheckDisk(settings);
@@ -115,6 +116,11 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             engine.Start(settings, target, folder);
             session.Encoder = engine.Encoder;
             clock.Start(); recordingOriginTicks = Stopwatch.GetTimestamp() - clock.ElapsedTicks;
+            if (settings.RecordInputs)
+            {
+                try { var inputPath = Path.Combine(folder, "inputs.jsonl"); inputs = new(target.ProcessId, inputPath, clock); session.InputLogPath = inputPath; }
+                catch (Exception ex) { session.InputError = ex.Message; }
+            }
             masking.Update(0, engine.VideoMasked);
             double nextPoll = 0, nextStatus = 0, nextDisk = 0, gameTime = initialTime;
             double? noVideoSince = null;
@@ -168,12 +174,13 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 if (now >= nextDisk) { CheckDisk(settings); nextDisk = now + 5; }
                 if (now >= nextStatus)
                 {
+                    if (inputs?.Error is { } inputError) session.InputError = "Gameplay inputs stopped: " + inputError;
                     var hooked = engine.AudioHooked();
                     Publish(new() { Armed = _armed, Recording = true, State = settings.CaptureMethod == CaptureMethod.FullscreenDisplay && !Windows.IsForeground(target.ProcessId) ? "Game unfocused — video masked" : Windows.IsIconic(target.Handle) ? "Game minimized — video may pause" : !engine.HasVideo ? "Waiting for game video" : "Recording", Encoder = engine.Encoder,
                         NativeVersion = engine.Version, ElapsedSeconds = now, Frames = engine.Frames, DroppedFrames = engine.DroppedFrames,
                         SessionId = session.Id, GameAudioHooked = hooked, GameForeground = Windows.IsForeground(target.ProcessId),
                         ActiveMode = settings.Mode, DesktopAudioEnabled = settings.DesktopAudio, MicrophoneEnabled = settings.Microphone,
-                        Error = settings.GameAudio && now > 10 && hooked == false ? "Game audio has not attached. Desktop audio remains off unless enabled." : null });
+                        Error = settings.GameAudio && now > 10 && hooked == false ? "Game audio has not attached. Desktop audio remains off unless enabled." : session.InputError });
                     session.Duration = now; session.MaskedRanges = masking.Snapshot(now); JsonStore.Write(metadata, session); nextStatus = now + 1;
                 }
                 cancellation.WaitHandle.WaitOne(100);
@@ -189,7 +196,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         }
         finally
         {
-            engine.Stop(); DrainMasking();
+            inputs?.Dispose(); engine.Stop(); DrainMasking();
             session.Duration = clock.Elapsed.TotalSeconds; session.EndedAt = DateTimeOffset.UtcNow;
             session.MaskedRanges = masking.Snapshot(session.Duration);
             if (session.Mode == RecordingMode.FullMatch && session.RecordingPath is { } match)

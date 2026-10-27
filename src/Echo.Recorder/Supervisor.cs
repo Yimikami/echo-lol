@@ -7,12 +7,12 @@ namespace Echo.Recorder;
 internal static class Supervisor
 {
     private sealed record Handoff(bool Armed, string? Error);
-    public static int Run(HostPaths paths)
+    public static int Run(HostPaths paths, bool initiallyArmed = true)
     {
         using var singleton = new Mutex(true, "Local\\" + paths.PipeName + "-supervisor", out var first);
         if (!first) return 0;
         if (File.Exists(paths.StopRequest)) File.Delete(paths.StopRequest);
-        bool armed = true;
+        bool armed = initiallyArmed;
         int consecutiveFaults = 0;
         while (!File.Exists(paths.StopRequest))
         {

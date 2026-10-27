@@ -11,14 +11,16 @@ internal static class Program
     {
         string? Arg(string key) { var i = Array.IndexOf(args, key); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         var paths = new HostPaths(Arg("--data-dir"));
+        if (args.Contains("--exit-echo")) { ApplicationExit.Request(paths); return 0; }
         if (args.Contains("--verify-hotkey")) { ApplicationConfiguration.Initialize(); return GlobalShortcut.VerifyRegistration() ? 0 : 1; }
+        if (args.Contains("--verify-input-registration")) { ApplicationConfiguration.Initialize(); return GameplayInputCapture.VerifyRegistration(paths.Root) ? 0 : 1; }
         if (args.Contains("--prepare-media")) { MediaPreparation.Prepare(Arg("--metadata") ?? throw new ArgumentException("Provide session metadata."), () => false); return 0; }
         if (args.Contains("--fixture")) { ApplicationConfiguration.Initialize(); Application.Run(new CaptureFixture(int.Parse(Arg("--tone") ?? "440"), args.Contains("--fullscreen"))); return 0; }
         if (args.Contains("--help"))
         {
             Console.WriteLine("Echo.Recorder [--data-dir PATH] [--diagnose | --record --seconds 20 [--synthetic | --window TITLE] [--mode clips|full]]\nNo arguments: watch for League, with tray controls. Never captures the desktop implicitly."); return 0;
         }
-        if (!args.Contains("--worker") && !args.Contains("--record") && !args.Contains("--diagnose")) return Supervisor.Run(paths);
+        if (!args.Contains("--worker") && !args.Contains("--record") && !args.Contains("--diagnose")) return Supervisor.Run(paths, !args.Contains("--paused"));
         using var mutex = new Mutex(true, "Local\\" + paths.PipeName, out var first);
         if (!first) { Console.Error.WriteLine("Echo's recorder is already running for this profile."); return 2; }
         try
@@ -46,12 +48,13 @@ internal static class Program
             menu.Items.Add("Save moment", null, (_, _) => host.Enqueue("save"));
             menu.Items.Add("Resume capture", null, (_, _) => host.Enqueue("arm"));
             menu.Items.Add("Pause capture", null, (_, _) => host.Enqueue("disarm"));
-            menu.Items.Add("Exit recorder", null, (_, _) => { File.WriteAllText(paths.StopRequest, "stop"); cancellation.Cancel(); Application.ExitThread(); });
+            menu.Items.Add("Exit Echo", null, (_, _) => { ApplicationExit.Request(paths); cancellation.Cancel(); Application.ExitThread(); });
             tray.ContextMenuStrip = menu; tray.DoubleClick += (_, _) => OpenUi(paths);
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); Application.Exit(); };
             using var workerMonitor = new System.Windows.Forms.Timer { Interval = 500 };
             workerMonitor.Tick += (_, _) =>
             {
+                if (File.Exists(paths.StopRequest)) { cancellation.Cancel(); Application.ExitThread(); return; }
                 if (!worker.IsAlive) { Application.ExitThread(); return; }
                 try { shortcut.Refresh(paths.LoadSettings().ManualShortcut); host.ShortcutState(shortcut.Active, shortcut.Error); }
                 catch (Exception e) { host.ShortcutState(shortcut.Active, e.Message); }

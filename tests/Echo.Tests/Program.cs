@@ -112,5 +112,18 @@ Test("overlapping masks do not duplicate footage", () => { var r = MaskTimeline.
 Test("masks outside a highlight are ignored", () => Check(MaskTimeline.Visible(10, 20, [new(0, 5), new(25, 30)]).Single() == new TimeRange(10, 20)));
 Test("cleaned event maps through discontinuous segments", () => { var c = new MediaClip("a", "x", 0, 15, "Kill", false) { Segments = [new(0, 0, 5), new(10, 5, 10)] }; Check(PlaybackNavigation.FileTime(c, 12) == 7 && PlaybackNavigation.BeforeEvent(c, 12, 0, 15) == 4); });
 Test("event inside removed video is not a false marker", () => { var c = new MediaClip("a", "x", 0, 15, "Kill", false) { Segments = [new(0, 0, 5), new(10, 5, 10)] }; Check(PlaybackNavigation.FileTime(c, 8) == null); });
+Test("gameplay inputs default to off", () => Check(!Settings().RecordInputs));
+Test("input APM excludes releases and presses older than sixty seconds", () => Check(GameplayInputs.Apm([new(1,"Q",true),new(2,"Q",false),new(60,"MouseRight",true),new(65,"W",true)], 64) == 1));
+Test("input hold state follows releases", () => Check(GameplayInputs.Held([new(1,"Q",true),new(2,"W",true),new(3,"Q",false)], 4).SetEquals(["W"])));
+Test("cleaned input time maps to the correct original segment boundary", () => { var c = new MediaClip("x", "x", 0, 8, "", false) { Segments = [new(10,0,3),new(20,3,5)] }; Check(GameplayInputs.RecordingTime(c,3) == 20 && GameplayInputs.RecordingTime(c,5) == 22); });
+Test("replay input mapping includes recording origin", () => Check(GameplayInputs.RecordingTime(new("x","x",0,8,"",false,100),2) == 102));
+Test("input loader rejects unrelated controls and interrupted lines", () => { var file=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".jsonl"); try { File.WriteAllLines(file,[JsonSerializer.Serialize(new InputSample(1,"Q",true)),JsonSerializer.Serialize(new InputSample(2,"Unrelated",true)),"{incomplete"]); Check(GameplayInputs.Read(file).Single().Control=="Q"); } finally { File.Delete(file); } });
+Test("overlay presets reject invalid sizes and positions",()=>{Throws(()=>new InputOverlayPreset{Width=.01}.Validate());Throws(()=>new InputOverlayPreset{X=double.NaN}.Validate());});
+Test("overlay presets reject unknown layouts",()=>Throws(()=>new InputOverlayPreset{Layout="unknown"}.Validate()));
+Test("all overlay layouts have visible keys within their bounds",()=>{foreach(var name in new[]{"Compact","Full","Mouse"}){var layout=OverlayAppearance.Layout(name);Check(layout.Keys.Count>0&&layout.Keys.All(k=>k.X>=0&&k.Y>=0&&k.X+k.Width<=layout.Width&&k.Y+k.Height<=layout.Height));}});
+Test("legacy settings receive an overlay preset",()=>{var s=JsonSerializer.Deserialize<EchoSettings>("{}",JsonStore.Options)!;Check(s.InputOverlay.Enabled&&s.InputOverlay.Layout=="Compact"&&s.Theme=="Dark");});
+Test("full keyboard F keys and navigation are permitted controls",()=>Check(GameplayInputs.Allowed.Contains("F12")&&GameplayInputs.Allowed.Contains("Left")&&GameplayInputs.Allowed.Contains("Z")));
+Test("theme selection is validated",()=>Throws(()=>(Settings() with{Theme="unknown"}).Validate()));
+Test("exit request is durable and carries a new identity",()=>{var root=Path.Combine(Path.GetTempPath(),"echo-exit-"+Guid.NewGuid());try{var p=new HostPaths(root);Check(ApplicationExit.Current(p)==null);ApplicationExit.Request(p);var first=ApplicationExit.Current(p);Check(first!=null&&File.Exists(p.StopRequest));ApplicationExit.Request(p);Check(ApplicationExit.Current(p)!=first);}finally{Directory.Delete(root,true);}});
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

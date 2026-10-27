@@ -40,6 +40,13 @@ internal static class MediaTools
         if (!double.IsFinite(duration) || duration <= 0) throw new InvalidDataException("The saved recording has no valid duration.");
         return duration;
     }
+    public static (int Width, int Height) VideoSize(string path)
+    {
+        var text = Run("ffmpeg", ["-hide_banner", "-threads", "1", "-i", path, "-t", "0", "-f", "null", "-"], includeStandardError: true);
+        var match = Regex.Match(text, @"Video:[^\r\n]*?\b(\d{2,5})x(\d{2,5})\b");
+        if (!match.Success) throw new InvalidDataException("Video dimensions are unavailable.");
+        return (int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value));
+    }
     public static string Remux(string source, Func<bool>? cancel = null)
     {
         var output = Path.ChangeExtension(source, ".mp4");
