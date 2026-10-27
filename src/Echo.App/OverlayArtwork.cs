@@ -17,7 +17,14 @@ internal static class OverlayArtwork
     private static readonly ConcurrentDictionary<string, Geometry> HeaderCache = new();
     private static readonly GlyphTypeface KeyFont = new(new Uri("pack://application:,,,/Echo;component/Assets/Fonts/BebasNeue-Regular.ttf"));
     internal static string FontIdentity => string.Join(";",KeyFont.FamilyNames.Values)+"|"+KeyFont.FontUri;
-    internal static OverlayArt Get(string layout) => Cache.GetOrAdd(layout, Create);
+    internal static OverlayArt Get(string layout) => Cache.GetOrAdd(layout, name=>Create(OverlayAppearance.Layout(name)));
+    internal static OverlayArt Get(InputOverlayPreset preset)
+    {
+        if(preset.Layout!="Custom")return Get(preset.Layout);
+        var key="Custom:"+preset.ShowMouse+":"+string.Join(',',preset.Keys.Order(StringComparer.Ordinal));
+        if(Cache.Count>64)Cache.Clear();
+        return Cache.GetOrAdd(key,_=>Create(OverlayAppearance.Layout(preset)));
+    }
     internal static Geometry Header(string value) { if(HeaderCache.Count>128)HeaderCache.Clear();return HeaderCache.GetOrAdd(value, text => Label(text, new Rect(10, 3, 155, 26), .08, false)); }
     private static Geometry Frozen(Geometry geometry)
     {
@@ -39,9 +46,9 @@ internal static class OverlayArtwork
         matrix.Translate(rect.X - transformed.X + (centered ? (rect.Width - transformed.Width) / 2 : 0), rect.Y - transformed.Y + (rect.Height - transformed.Height) / 2);
         glyph.Transform = new MatrixTransform(matrix); return Frozen(glyph);
     }
-    private static OverlayArt Create(string name)
+    private static OverlayArt Create(OverlayLayout layout)
     {
-        var layout = OverlayAppearance.Layout(name); var parts = new List<OverlayArtPart>();
+        var parts = new List<OverlayArtPart>();
         foreach (var key in layout.Keys.Where(k => !k.Id.StartsWith("Mouse", StringComparison.Ordinal) && !k.Id.StartsWith("Wheel", StringComparison.Ordinal)))
         {
             var shear = key.Height * .22;
@@ -52,7 +59,7 @@ internal static class OverlayArtwork
             var label = Label(key.Label, new Rect(key.X + 10, key.Y + 9, Math.Max(1, key.Width - 20), key.Height - 18));
             parts.Add(new(key.Id, shape, outline, label));
         }
-        var mouse = layout.Mouse;
+        if(layout.Mouse is not {} mouse)return new(layout.Width,layout.Height,parts);
         Geometry MousePath(string path, bool mirror = false)
         {
             var geometry = Geometry.Parse(path).Clone();

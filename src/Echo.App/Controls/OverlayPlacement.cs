@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.IO;
 using Echo.Core;
 
 namespace Echo.App.Controls;
@@ -33,11 +34,13 @@ public sealed class OverlayPlacement : Grid
         ToolTip="Drag the overlay or its corner to position and resize it.";
     }
     public void SetPreset(InputOverlayPreset preset){_preset=preset;ArrangeOverlay();}
-    internal void LoadBackground()
+    private string? _backgroundPath;
+    internal void LoadBackground(string? path=null)
     {
-        if(_background.Source!=null)return;
-        var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.DecodePixelWidth=1280;bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.UriSource=new Uri("pack://application:,,,/Echo;component/Assets/game-preview.png");bitmap.EndInit();bitmap.Freeze();_background.Source=bitmap;
+        if(_background.Source!=null&&_backgroundPath==path)return;
+        var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.DecodePixelWidth=1280;bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.UriSource=path!=null?new Uri(Path.GetFullPath(path)):new Uri("pack://application:,,,/Echo;component/Assets/game-preview.png");bitmap.EndInit();bitmap.Freeze();_background.Source=bitmap;_backgroundPath=path;
     }
+    internal string? BackgroundPath=>_backgroundPath;
     protected override Size MeasureOverride(Size availableSize)
     {
         if(double.IsFinite(availableSize.Width)&&availableSize.Width>0)Height=availableSize.Width*9/16;

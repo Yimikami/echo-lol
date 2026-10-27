@@ -4,11 +4,14 @@
 
 A lightweight League of Legends recorder for Windows. Keep your plays, edit them, and share them.
 
+![Echo clip library](docs/images/library.png)
+
 - Automatically capture kills, assists and deaths, or record the entire match.
 - Game audio by default; desktop audio and microphone are optional.
 - Browse, watch, trim and delete recordings.
+- Navigate matches with event markers and an APM activity timeline.
 - Export clips with your saved keyboard/mouse and APM overlay.
-- Optionally record gameplay inputs, watch them directly on clips with a movable, resizable overlay.
+- Choose which keys appear, and position the overlay on a preview from your own recordings.
 - Save a manual moment with a configurable shortcut; default: **Ctrl+Shift+F8**.
 
 ## Download

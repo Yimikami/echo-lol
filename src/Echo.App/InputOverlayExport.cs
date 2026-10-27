@@ -9,7 +9,7 @@ internal static class InputOverlayExport
     private static string Bgr(string rgb)=>rgb[4..6]+rgb[2..4]+rgb[0..2];
     internal static string Build(MediaClip clip,double start,double end,string? inputPath,InputOverlayPreset preset,int width,int height)
     {
-        preset.Validate();var art=OverlayArtwork.Get(preset.Layout);var colors=OverlayAppearance.Colors(preset.Style);var samples=GameplayInputs.Read(inputPath);var hasData=inputPath!=null&&File.Exists(inputPath);
+        preset.Validate();var art=OverlayArtwork.Get(preset);var colors=OverlayAppearance.Colors(preset.Style);var samples=GameplayInputs.Read(inputPath);var hasData=inputPath!=null&&File.Exists(inputPath);
         var h=preset.Collapsed?38:art.Height;var scale=Math.Min(width*preset.Width/art.Width,(double)height/h);var x=Math.Clamp(width*preset.X,0,width-art.Width*scale);var y=Math.Clamp(height*preset.Y,0,Math.Max(0,height-h*scale));var length=end-start;
         var text=new StringBuilder($"[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nScaledBorderAndShadow: yes\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,16,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n");
         void Draw(int layer,double a,double b,System.Windows.Media.Geometry geometry,string color,string alpha="00")

@@ -29,12 +29,14 @@ public partial class MainWindow
         {
             ClipList.SelectedIndex = 0; PrepareVerificationPreview();
             Check("watching starts without trim controls", !_trimOpen && Inspector.Visibility == Visibility.Collapsed && TrimWorkbench.Visibility == Visibility.Collapsed);
+            Check("normal playback always shows activity navigation", PlaybackActivityPanel.Visibility==Visibility.Visible&&Seek.Visibility==Visibility.Collapsed&&PlaybackActivity.End>PlaybackActivity.Start);
             ToggleTrimClick(this, new()); Check("trim is an explicit optional action", _trimOpen && Inspector.Visibility == Visibility.Visible);
             Check("selecting a real clip opens the editor", _selected != null && EditorPanel.Visibility == Visibility.Visible && LibraryPanel.Visibility == Visibility.Collapsed);
             VolumeSlider.Value = .35; Check("volume controls media volume", Math.Abs(Player.Volume - .35) < .001);
             MuteClick(this, new()); Check("mute toggles playback", Player.IsMuted);
             MuteClick(this, new()); Check("unmute toggles playback", !Player.IsMuted);
             SetFullscreen(true); Check("fullscreen expands only the player workspace", _fullscreen && Sidebar.Visibility == Visibility.Collapsed && Grid.GetColumnSpan(EditorPanel) == 2 && InspectorColumn.Width.Value == 0);
+            Check("fullscreen uses an icon without a floating text button",FindName("ExitFullscreenButton")==null&&FullscreenToggleIcon.Kind=="ExitFullscreen");
             SetFullscreen(false); Check("fullscreen restores inspector and timeline", !_fullscreen && Inspector.Visibility == Visibility.Visible && TrimWorkbench.Visibility == Visibility.Visible);
             var marker = _selected!.Session.Moments.FirstOrDefault(m => m.RecordingTime - _selected.Clip.RecordingOrigin >= Timeline.SelectionStart && m.RecordingTime - _selected.Clip.RecordingOrigin <= Timeline.SelectionEnd);
             if (marker != null)
@@ -72,6 +74,7 @@ public partial class MainWindow
                 ShowSettingsCategory(category);
                 await RenderPreview(Path.Combine(output, $"settings-{category.ToLowerInvariant()}-{size.Width}.png"), size);
                 Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings,InputSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
+                if(category=="Inputs"){var frame=InputPlacementPreview.TransformToAncestor(SettingsScroll).TransformBounds(new Rect(InputPlacementPreview.RenderSize));Check($"entire gameplay HUD preview fits at {size.Width}px",frame.Top>=0&&frame.Bottom<=SettingsScroll.ActualHeight+1);}
             }
         }
         var testPaths = new HostPaths(Path.Combine(output, "settings-profile")); var probe = new MainWindow(testPaths, false);

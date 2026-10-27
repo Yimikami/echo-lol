@@ -8,7 +8,7 @@ public sealed class InputOverlay : FrameworkElement
     public int Apm { get; set; }
     public bool HasData { get; set; } = true;
     public InputOverlayPreset Preset { get; set; } = new();
-    public double Aspect => (double)OverlayAppearance.Layout(Preset.Layout).Width / (Preset.Collapsed ? 38 : OverlayAppearance.Layout(Preset.Layout).Height);
+    public double Aspect { get { var art=OverlayArtwork.Get(Preset);return (double)art.Width/(Preset.Collapsed?38:art.Height); } }
     private static SolidColorBrush Brush(string rgb, byte alpha=255)
     {
         var brush=new SolidColorBrush(Color.FromArgb(alpha,Convert.ToByte(rgb[..2],16),Convert.ToByte(rgb[2..4],16),Convert.ToByte(rgb[4..6],16)));brush.Freeze();return brush;
@@ -17,7 +17,7 @@ public sealed class InputOverlay : FrameworkElement
     {
         // Transparent hit area keeps a wireframe overlay draggable between the keys.
         dc.DrawRectangle(Brushes.Transparent,null,new Rect(RenderSize));
-        var art=OverlayArtwork.Get(Preset.Layout);var colors=OverlayAppearance.Colors(Preset.Style);var scale=ActualWidth/art.Width;
+        var art=OverlayArtwork.Get(Preset);var colors=OverlayAppearance.Colors(Preset.Style);var scale=ActualWidth/art.Width;
         var stroke=Brush(colors.Line);var label=Brush(colors.Text);var pressed=Brush(colors.Pressed);var activeLabel=Brush(colors.Key);var idle=Brush(colors.Key,Preset.Style=="Light"?(byte)223:(byte)159);
         dc.PushTransform(new ScaleTransform(scale,scale));
         if(!Preset.Collapsed)foreach(var part in art.Parts)

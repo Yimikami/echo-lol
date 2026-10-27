@@ -320,7 +320,7 @@
           <Grid x:Name="PlayerDock">
             <Grid.RowDefinitions>
               <RowDefinition Height="*"/>
-              <RowDefinition Height="22"/>
+              <RowDefinition Height="136"/>
               <RowDefinition Height="58"/>
             </Grid.RowDefinitions>
             <Border x:Name="VideoSurface" Background="#08090B" Margin="24,20,24,0" CornerRadius="5" MouseLeftButtonDown="VideoClicked">
@@ -337,12 +337,6 @@
                   <local:PhosphorIcon Kind="Play" Width="40" Height="40" Foreground="#7182A2" HorizontalAlignment="Center"/>
                   <TextBlock Text="Choose a clip to preview" FontSize="18" Margin="0,20,0,0"/>
                 </StackPanel>
-                <Button x:Name="ExitFullscreenButton" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="18" Style="{StaticResource QuietButton}" Click="FullscreenClick" ToolTip="Exit full screen (Esc)">
-                  <StackPanel Orientation="Horizontal">
-                    <local:PhosphorIcon Kind="ExitFullscreen" Width="18" Height="18"/>
-                    <TextBlock Text="Exit full screen" FontSize="12" Margin="8,0,0,0"/>
-                  </StackPanel>
-                </Button>
               </Grid>
             </Border>
             <Grid Grid.Row="2" Margin="24,0">
@@ -368,12 +362,13 @@
                   <local:PhosphorIcon x:Name="VolumeIcon" Kind="Volume" Width="19" Height="19"/>
                 </Button>
                 <Slider x:Name="VolumeSlider" Width="66" Minimum="0" Maximum="1" Value="0.7" ValueChanged="VolumeChanged" IsMoveToPointEnabled="True" AutomationProperties.Name="Playback volume" Margin="2,0,10,0"/>
-                <Button Style="{StaticResource IconButton}" Click="FullscreenClick" ToolTip="Full screen (F)" AutomationProperties.Name="Full screen">
-                  <local:PhosphorIcon Kind="Fullscreen" Width="18" Height="18"/>
+                <Button x:Name="FullscreenToggleButton" Style="{StaticResource IconButton}" Click="FullscreenClick" ToolTip="Full screen (F)" AutomationProperties.Name="Full screen">
+                  <local:PhosphorIcon x:Name="FullscreenToggleIcon" Kind="Fullscreen" Width="18" Height="18"/>
                 </Button>
               </StackPanel>
             </Grid>
-            <Slider x:Name="Seek" Visibility="Visible" Minimum="0" Maximum="1" ValueChanged="SeekChanged" PreviewMouseLeftButtonDown="SeekDown" PreviewMouseLeftButtonUp="SeekUp" Grid.Row="1" Margin="24,2,24,0" IsMoveToPointEnabled="True" AutomationProperties.Name="Playback position"/>
+            <Grid x:Name="PlaybackActivityPanel" Grid.Row="1" Margin="24,8,24,0"><Grid.RowDefinitions><RowDefinition Height="25"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Text="Activity" FontSize="12" FontWeight="SemiBold"/><TextBlock x:Name="ApmSummary" Grid.Column="1" Text="APM —" FontSize="11" Foreground="{DynamicResource SecondaryBrush}" TextAlignment="Right" Margin="8,0" ToolTip="APM rate over a rolling 10-second window"/></Grid><local:PlaybackTimeline x:Name="PlaybackActivity" Grid.Row="1" AutomationProperties.Name="Match activity timeline"/></Grid>
+            <Slider x:Name="Seek" Visibility="Collapsed" Minimum="0" Maximum="1" ValueChanged="SeekChanged" PreviewMouseLeftButtonDown="SeekDown" PreviewMouseLeftButtonUp="SeekUp" Grid.Row="1" Margin="24,2,24,0" IsMoveToPointEnabled="True" AutomationProperties.Name="Playback position"/>
           </Grid>
           <Border x:Name="Inspector" Grid.Column="1" Background="{DynamicResource PanelBrush}" BorderBrush="#30333B" BorderThickness="1,0,0,0" Padding="20,24,20,18" Visibility="Collapsed">
             <Grid>
@@ -679,11 +674,10 @@
               </StackPanel>
               <StackPanel x:Name="InputSettings" Visibility="Collapsed">
                 <TextBlock Text="Input overlay" FontSize="27" FontWeight="Bold"/>
-                <Border Style="{StaticResource SettingRow}"><StackPanel><CheckBox x:Name="InputVisibleBox" Content="Show overlay on clips" IsChecked="True"/><CheckBox x:Name="InputApmBox" Content="Show APM" IsChecked="True" Margin="0,16,0,0"/><TextBlock Text="Gameplay input recording can be enabled in Highlights. Older clips show an idle layout." Style="{StaticResource Hint}" Margin="0,14,0,0"/></StackPanel></Border>
-                <Border Style="{StaticResource SettingRow}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Layout" Margin="0,0,0,9"/><ComboBox x:Name="InputLayoutBox" SelectedIndex="0"><ComboBoxItem Content="Compact keys + mouse"/><ComboBoxItem Content="Extended keys + mouse"/><ComboBoxItem Content="Mouse"/></ComboBox></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Style" Margin="0,0,0,9"/><ComboBox x:Name="InputStyleBox" SelectedIndex="0"><ComboBoxItem Content="Dark"/><ComboBoxItem Content="Light"/><ComboBoxItem Content="Outline"/></ComboBox></StackPanel></Grid></Border>
-                <TextBlock Text="Position on screen" FontWeight="SemiBold" Margin="0,24,0,8"/>
-                <TextBlock Text="Drag to move. Use the corner to resize. Applies to every clip and export." Style="{StaticResource Hint}" Margin="0,0,0,12"/>
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" ClipToBounds="True"><local:OverlayPlacement x:Name="InputPlacementPreview"/></Border>
+                <Border Style="{StaticResource SettingRow}" Padding="0,14"><StackPanel><StackPanel Orientation="Horizontal"><CheckBox x:Name="InputVisibleBox" Content="Show overlay on clips" IsChecked="True"/><CheckBox x:Name="InputApmBox" Content="Show APM" IsChecked="True" Margin="28,0,0,0"/></StackPanel><TextBlock Text="Enable gameplay input recording in Highlights for keys and APM." Style="{StaticResource Hint}" Margin="0,12,0,0"/></StackPanel></Border>
+                <Border Style="{StaticResource SettingRow}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><DockPanel Margin="0,0,0,9"><Button DockPanel.Dock="Right" Content="Choose keys" Click="CustomizeInputsClick" Padding="8,2" MinHeight="24" Style="{StaticResource QuietButton}"/><TextBlock Text="Layout" VerticalAlignment="Center"/></DockPanel><ComboBox x:Name="InputLayoutBox" SelectedIndex="0"><ComboBoxItem Content="Compact keys + mouse"/><ComboBoxItem Content="Extended keys + mouse"/><ComboBoxItem Content="Mouse"/><ComboBoxItem Content="Custom keys"/></ComboBox></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Style" Margin="0,0,0,9"/><ComboBox x:Name="InputStyleBox" SelectedIndex="0"><ComboBoxItem Content="Dark"/><ComboBoxItem Content="Light"/><ComboBoxItem Content="Outline"/></ComboBox></StackPanel></Grid></Border>
+                <DockPanel Margin="0,18,0,8"><Button DockPanel.Dock="Right" Content="Use latest clip" Click="RefreshPlacementPreviewClick" Style="{StaticResource QuietButton}" Padding="8,3" MinHeight="28" ToolTip="Use the selected clip, or the latest recording"/><TextBlock Text="Position on screen" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel>
+                <Border HorizontalAlignment="Left" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" ClipToBounds="True"><local:OverlayPlacement x:Name="InputPlacementPreview"/></Border>
                 <Border Style="{StaticResource SettingRow}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Size"/><Slider x:Name="InputSizeSlider" Minimum="0.15" Maximum="0.85" Value="0.34" ValueChanged="InputSizeChanged" Margin="0,14,0,0"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Position" Margin="0,0,0,9"/><ComboBox x:Name="InputPositionBox" SelectedIndex="0" SelectionChanged="InputPositionChanged"><ComboBoxItem Content="Bottom left"/><ComboBoxItem Content="Bottom right"/><ComboBoxItem Content="Top left"/><ComboBoxItem Content="Top right"/><ComboBoxItem Content="Custom"/></ComboBox></StackPanel></Grid></Border>
               </StackPanel>
             </Grid>

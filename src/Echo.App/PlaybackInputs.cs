@@ -14,11 +14,11 @@ public partial class MainWindow
     private void LoadOverlayFields()
     {
         _inputPreset=_settings.InputOverlay;InputVisibleBox.IsChecked=_inputPreset.Enabled;InputApmBox.IsChecked=_inputPreset.ShowApm;
-        InputLayoutBox.SelectedIndex=_inputPreset.Layout=="Full"?1:_inputPreset.Layout=="Mouse"?2:0;InputStyleBox.SelectedIndex=_inputPreset.Style=="Light"?1:_inputPreset.Style=="Outline"?2:0;InputSizeSlider.Value=_inputPreset.Width;
+        InputLayoutBox.SelectedIndex=_inputPreset.Layout=="Full"?1:_inputPreset.Layout=="Mouse"?2:_inputPreset.Layout=="Custom"?3:0;InputStyleBox.SelectedIndex=_inputPreset.Style=="Light"?1:_inputPreset.Style=="Outline"?2:0;InputSizeSlider.Value=_inputPreset.Width;
         ThemeBox.SelectedIndex=_settings.Theme=="Light"?1:_settings.Theme=="System"?2:0;
         RefreshOverlayPreview();
     }
-    private InputOverlayPreset ReadOverlayFields()=>_inputPreset with{Enabled=InputVisibleBox.IsChecked==true,ShowApm=InputApmBox.IsChecked==true,Layout=InputLayoutBox.SelectedIndex==1?"Full":InputLayoutBox.SelectedIndex==2?"Mouse":"Compact",Style=InputStyleBox.SelectedIndex==1?"Light":InputStyleBox.SelectedIndex==2?"Outline":"Dark",Width=InputSizeSlider.Value};
+    private InputOverlayPreset ReadOverlayFields()=>_inputPreset with{Enabled=InputVisibleBox.IsChecked==true,ShowApm=InputApmBox.IsChecked==true,Layout=InputLayoutBox.SelectedIndex==1?"Full":InputLayoutBox.SelectedIndex==2?"Mouse":InputLayoutBox.SelectedIndex==3?"Custom":"Compact",Style=InputStyleBox.SelectedIndex==1?"Light":InputStyleBox.SelectedIndex==2?"Outline":"Dark",Width=InputSizeSlider.Value};
     private void RefreshOverlayPreview()
     {
         InputPlacementPreview.SetPreset(_inputPreset);
@@ -26,7 +26,12 @@ public partial class MainWindow
         InputPositionBox.SelectedIndex=Enumerable.Range(0,4).FirstOrDefault(index => { var corner=OverlayCorner(index); return Math.Abs(_inputPreset.X-corner.X)<.001&&Math.Abs(_inputPreset.Y-corner.Y)<.001; },4);
         _updating=updating;
     }
-    private void LoadInputData(ClipItem item){_inputSamples=GameplayInputs.Read(item.Session.InputLogPath);UpdatePlaybackInputs(item.Clip.Start);}
+    private void LoadInputData(ClipItem item)
+    {
+        _inputSamples=GameplayInputs.Read(item.Session.InputLogPath);
+        PlaybackActivity.Activity=item.Session.InputLogPath is {} path&&File.Exists(path)?InputActivity.Build(_inputSamples,item.Clip,item.Clip.Start,item.Clip.End):[];
+        UpdatePlaybackInputs(item.Clip.Start);
+    }
     private Rect VideoBounds()
     {
         var w=InputCanvas.ActualWidth;var h=InputCanvas.ActualHeight;var nw=Player.NaturalVideoWidth>0?Player.NaturalVideoWidth:_selected?.Session.RecordingOptions?.Width??1920;var nh=Player.NaturalVideoHeight>0?Player.NaturalVideoHeight:_selected?.Session.RecordingOptions?.Height??1080;
@@ -79,9 +84,13 @@ public partial class MainWindow
     }
     private Point OverlayCorner(int index)
     {
-        var layout=OverlayAppearance.Layout(_inputPreset.Layout);var aspect=layout.Width/(double)(_inputPreset.Collapsed?38:layout.Height);
+        var layout=OverlayAppearance.Layout(_inputPreset);var aspect=layout.Width/(double)(_inputPreset.Collapsed?38:layout.Height);
         var width=Math.Min(_inputPreset.Width,aspect*9/16);var height=width/aspect*16/9;
         return new(index is 1 or 3?Math.Max(0,.98-width):.02,index<2?Math.Max(0,.98-height):.02);
     }
     private void RunSetupClick(object sender,RoutedEventArgs e){new OnboardingWindow(_paths){Owner=this}.ShowDialog();_settings=_paths.LoadSettings();_updating=true;LoadSettingsFields();_updating=false;UpdatePlaybackInputs(Player.Position.TotalSeconds);}
+    private void CustomizeInputsClick(object sender,RoutedEventArgs e)
+    {
+        new InputKeysWindow(_inputPreset,preset=>{_inputPreset=preset;PersistInputPreset();}){Owner=this}.ShowDialog();
+    }
 }

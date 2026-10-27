@@ -61,7 +61,10 @@ public partial class MainWindow : Window
         Timeline.SeekRequested += SeekTo;
         Timeline.MomentRequested += t => { SeekTo(Math.Max(Timeline.SelectionStart, t - 3)); SetPlaying(true); };
         Timeline.RangeChanged += (_, _) => UpdateRange();
+        PlaybackActivity.SeekRequested += SeekTo;
+        PlaybackActivity.MomentRequested += t=>{SeekTo(Math.Max(PlaybackActivity.Start,t-3));SetPlaying(true);};
         InputPlacementPreview.PlacementChanged += preset => { _inputPreset=preset; PersistInputPreset(); };
+        SettingsScroll.SizeChanged+=(_,_)=>InputPlacementPreview.MaxWidth=Math.Clamp((SettingsScroll.ActualHeight-340)*16/9,320,880);
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
         _timer.Tick += (_, _) => Tick(); _timer.Start();
         Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
@@ -80,6 +83,7 @@ public partial class MainWindow : Window
         var position = Math.Clamp(Player.Position.TotalSeconds, 0, _duration);
         _updating = true; Seek.Value = position; _updating = false;
         if (Math.Abs(Timeline.Position - position) > .01) { Timeline.Position = position; Timeline.InvalidateVisual(); }
+        PlaybackActivity.Position=position;PlaybackActivity.InvalidateVisual();
         UpdatePlaybackTime(position);
         UpdatePlaybackInputs(position);
         if (_playing && position >= Timeline.SelectionEnd) SetPlaying(false);
@@ -277,6 +281,7 @@ public partial class MainWindow : Window
         if (_selected == null || _duration <= 0) return;
         var at = Math.Clamp(seconds, 0, _duration); Player.Position = TimeSpan.FromSeconds(at); PlayerPoster.Visibility = Visibility.Collapsed;
         Timeline.Position = at; Timeline.InvalidateVisual(); _updating = true; Seek.Value = at; _updating = false;
+        PlaybackActivity.Position=at;PlaybackActivity.InvalidateVisual();
         UpdatePlaybackTime(at);
         UpdatePlaybackInputs(at);
     }
@@ -313,6 +318,7 @@ public partial class MainWindow : Window
         StartInput.Text = Time(Timeline.SelectionStart, true); EndInput.Text = Time(Timeline.SelectionEnd, true);
         RangeLabel.Text = _duration > 0 ? Time(Timeline.SelectionEnd - Timeline.SelectionStart, true) : "00:00.0"; Timeline.InvalidateVisual(); _updating = false;
         UpdateSeekBounds();
+        RefreshPlaybackActivity();
     }
     private void ResetTrimClick(object sender, RoutedEventArgs e) { if (_selected == null) return; Timeline.SelectionStart = Math.Clamp(_selected.Clip.Start, 0, _duration); Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration); UpdateRange(); SeekTo(Timeline.SelectionStart); }
     private void SetInClick(object sender, RoutedEventArgs e) { if (_duration <= 0) return; Timeline.SelectionStart = Math.Min(Player.Position.TotalSeconds, Math.Max(0, Timeline.SelectionEnd - .1)); UpdateRange(); }
@@ -327,6 +333,7 @@ public partial class MainWindow : Window
         InspectorColumn.Width = new GridLength(open && !_fullscreen ? 250 : 0);
         EditorPanel.RowDefinitions[2].Height = new GridLength(open && !_fullscreen ? 216 : 0);
         TrimButtonLabel.Text = open ? "Done" : "Trim";
+        UpdateActivityVisibility();
         UpdateSeekBounds();
     }
     private void UpdateSeekBounds()
@@ -367,6 +374,8 @@ public partial class MainWindow : Window
     {
         if (fullscreen && _selected == null) return;
         _fullscreen = fullscreen;
+        FullscreenToggleIcon.Kind=fullscreen?"ExitFullscreen":"Fullscreen";
+        FullscreenToggleButton.ToolTip=fullscreen?"Exit full screen (Esc)":"Full screen (F)";
         if (fullscreen)
         {
             _priorWindowState = WindowState; _priorChrome = WindowChrome.GetWindowChrome(this); _priorResizeMode = ResizeMode;
@@ -374,13 +383,13 @@ public partial class MainWindow : Window
         }
         else { WindowState = WindowState.Normal; ResizeMode = _priorResizeMode; WindowChrome.SetWindowChrome(this, _priorChrome); WindowState = _priorWindowState; }
         foreach (var element in new UIElement[] { TitleBar, Sidebar, SelectedHeading }) element.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        ExitFullscreenButton.Visibility = fullscreen ? Visibility.Visible : Visibility.Collapsed;
         InspectorColumn.Width = new GridLength(!fullscreen && _trimOpen ? 250 : 0);
         Inspector.Visibility = TrimWorkbench.Visibility = !fullscreen && _trimOpen ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.RowDefinitions[0].Height = new GridLength(fullscreen ? 0 : 70);
         EditorPanel.RowDefinitions[2].Height = new GridLength(!fullscreen && _trimOpen ? 216 : 0);
         VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(24, 20, 24, 0);
         Grid.SetRow(EditorPanel, fullscreen ? 0 : 2); Grid.SetColumn(EditorPanel, fullscreen ? 0 : 1); Grid.SetRowSpan(EditorPanel, fullscreen ? 3 : 1); Grid.SetColumnSpan(EditorPanel, fullscreen ? 2 : 1);
+        UpdateActivityVisibility();
     }
     private void WindowKeyDown(object sender, KeyEventArgs e)
     {
@@ -513,7 +522,7 @@ public partial class MainWindow : Window
     private void ShowSettingsCategory(string category)
     {
         _settingsCategory = category;
-        if(category=="Inputs")InputPlacementPreview.LoadBackground();
+        if(category=="Inputs")_ = LoadPlacementBackground();
         foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
         foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory,InputsCategory })
         {
