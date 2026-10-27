@@ -1,6 +1,6 @@
-# Echo studio design
+# Echo interface design
 
-Echo's interface is a local highlight studio. The earlier mint list/player dashboard was replaced at the user's request. This redesign used the Anthropic frontend-design guidance, Vercel Web Interface Guidelines as applicable to native controls, and real Cap / DaVinci Resolve reference screens. Impeccable was not used for this revision.
+Echo opens a local clip library and player. The earlier mint list/player dashboard was replaced at the user's request. This redesign used the Anthropic frontend-design guidance, Vercel Web Interface Guidelines as applicable to native controls, and real Cap / DaVinci Resolve reference screens. Impeccable was not used for this revision.
 
 ## Visual system
 
@@ -16,7 +16,7 @@ A 76px navigation rail anchors Library, Matches and Settings. The main surface i
 
 A page holds at most 32 items. Metadata is separate from thumbnails: images decode lazily and use weak caches so loading the library does not eagerly decode every saved clip. No decorative continuous animation runs.
 
-## Editor
+## Playback and optional trimming
 
 Opening a clip switches to a large player with a seek bar; Back / Escape returns to the gallery. Editing controls stay hidden until **Trim** is selected. Then the 250px inspector holds trim in/out, selection duration and MP4 export. The timeline owns the full bottom width and draws bounded real video frames with preserved aspect ratio, a time ruler, direct trim edges, playhead and Phosphor event icons. The inspector can scroll at the minimum height while keeping Export accessible. Kill, death and assist counts use sword, skull and handshake icons consistently across the library and timeline.
 
@@ -26,7 +26,7 @@ Selected poster images are generated at up to 1280px. Poster and filmstrip work 
 
 ## Settings and feedback
 
-Recording, Audio, Highlights and Storage have dedicated categories. Rows align labels and controls; audio rows have explicit toggles. Selections save immediately, numeric edits save after a 450ms pause, and typed folder paths save on leaving the field. Folder-picker selections save immediately. Invalid edits stay visible without replacing valid settings. There is no Save changes button. The footer distinguishes saved settings from changes that apply next recording. Highlights settings include a configurable global manual shortcut and optional removal of focus-masked intervals from new highlights. Icon controls have automation names; trim has time-field alternatives and keyboard controls. Deletion has a focus-cycling confirmation and keeps the existing Recycle Bin/shared-source protections. Manual saves and deletions show visible, dismissible notifications even when the gallery is open. Redundant studio slogans and storage footnotes were removed.
+Recording, Audio, Highlights and Storage have dedicated categories. Rows align labels and controls; audio rows have explicit toggles. Selections save immediately, numeric edits save after a 450ms pause, and typed folder paths save on leaving the field. Folder-picker selections save immediately. Invalid edits stay visible without replacing valid settings. There is no Save changes button. Successful saves are silent; the settings footer only appears for an error. Recording changes take effect next recording. Highlights settings include a configurable global manual shortcut and optional removal of focus-masked intervals from new highlights. Icon controls have automation names; trim has time-field alternatives and keyboard controls. Deletion has a focus-cycling confirmation and keeps the existing Recycle Bin/shared-source protections. Manual saves and deletions show visible, dismissible notifications even when the gallery is open. Redundant slogans and storage footnotes were removed.
 
 ## Research inspected
 
@@ -41,6 +41,8 @@ These informed layout and interaction; reference-product branding, media and pro
 
 ## Verification
 
-Native offscreen WPF renders covered gallery, normal player, optional trim editor and all four settings categories at 1480×920 and 1100×720. Forty-two checks passed, including embedded font/icon resolution, optional trimming, volume/mute, fullscreen restoration, event lead-in, confirmation cancellation, immediate audio/mode persistence, shortcut settings, active-match visibility, bounded pagination and search reset. Core tests: 53 passed. Global shortcut registration, conflict handling and release also passed a native Windows check.
+Native offscreen WPF renders covered gallery, normal player, optional trim editor and all five settings categories at 1480×920 and 1100×720. Forty-six checks passed, including embedded font/icon resolution, optional trimming, volume/mute, fullscreen restoration, event lead-in, confirmation cancellation, immediate audio/mode persistence, shortcut settings, active-match visibility, bounded pagination and search reset. Core tests: 66 passed. Global shortcut registration, conflict handling and release also passed a native Windows check.
 
 These are actual application visual-tree renders and handler tests, not a claim of live gameplay FPS, Windows taskbar/fullscreen acceptance, full assist acceptance or native crash elimination. Private clip previews remain local. The public settings image is labeled as a render from the native UI.
+
+Input overlays are part of the ordinary player. Their position, size, layout, theme and collapsed state persist once for all clips and direct exports. Built-in League, full keyboard and mouse layouts use original native drawing code; input-overlay (https://github.com/univrsal/input-overlay) informed this interaction. The OBS plugin and its hook library are not bundled. First-run setup covers theme, quality, mode, source, moments, audio, length, shortcut and storage; Skip preserves defaults. App themes include Dark, Light and Windows.

@@ -4,7 +4,7 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 
 ## Completed locally
 
-- Core event/configuration/planning tests: **53 passed**. Covers identity aliases, event timestamps, multiple events per poll, replay deduplication, stale events, late-start baseline, clock reset, malformed data, configurable capture kinds, overlapping ranges, tail timing, force flush, long-fight segmentation and atomic sidecars. Also covers three-second lead-ins, replay-origin and discontinuous segment mapping, trim bounds, shared recording deletion, recycling rollback, active/out-of-library protection, shortcut validation and actual-state mask intervals.
+- Core event/configuration/planning tests: **66 passed**. Covers identity aliases, event timestamps, multiple events per poll, replay deduplication, stale events, late-start baseline, clock reset, malformed data, configurable capture kinds, overlapping ranges, tail timing, force flush, long-fight segmentation and atomic sidecars. Also covers three-second lead-ins, replay-origin and discontinuous segment mapping, trim bounds, shared recording deletion, recycling rollback, active/out-of-library protection, shortcut validation and actual-state mask intervals.
 - Native OBS 33.0.0 initialization and NVENC H.264 encoding at 1920×1080/60 FPS.
 - Synthetic full recording: playable MP4 after validated MKV remux.
 - Synthetic event sequence: kill, assist and death each produced a saved replay and catalog entry. These are fixtures, not Riot gameplay events.
@@ -15,11 +15,13 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 - Live fullscreen practice session: **28 kill events, 1 death event and 15 saved clips** in a completed recording session of about 9 minutes. A saved frame was visually verified as actual League gameplay. Assist detection remains fixture-verified; this solo practice session did not establish live assist acceptance.
 - Public repository published at https://github.com/Yimikami/echo-lol; Windows CI passed on the earlier published recording/library revisions. New fixes must be checked at their own commit.
 - Studio redesign: a native gallery, dedicated editor and four settings categories rendered at 1480×920 and 1100×720. Manrope and regular Phosphor vectors resolve from bundled assets. These are offscreen application renders, not desktop screenshots or gameplay evidence.
-- **42 UI checks passed** across both sizes: automatic startup, font/icon resources, gallery/player/back navigation, opt-in trimming, volume/mute, visible volume-track geometry, fullscreen layout restoration, event lead-in, delete confirmation/cancellation, settings categories/validation/persistence, immediate audio/mode saving, shortcut persistence, active full-match visibility, bounded pagination and search reset.
+- **46 UI checks passed** across both sizes: automatic startup, font/icon resources, gallery/player/back navigation, opt-in trimming, volume/mute, visible volume-track geometry, fullscreen layout restoration, event lead-in, delete confirmation/cancellation, settings categories/validation/persistence, immediate audio/mode saving, shortcut persistence, active full-match visibility, bounded pagination and search reset.
 - Global shortcut registration, conflict detection and release/re-registration passed against real Windows APIs. No key injection was used; in-game shortcut acceptance remains open.
 - Desktop loopback audio: the packaged recorder captured a deliberately quiet 997 Hz system-output fixture in a 7.07-second synthetic recording. Band-limited output measured −55.1 dB mean / −51.9 dB peak. This verifies this machine's current default output device, not every audio routing setup. Microphone was off.
 - Automatic highlight preparation: an eight-second synthetic A/V recording with a masked interval from 2–4 seconds produced a decodable 5.88-second copy (including boundary guards). A nonzero-start 1–7-second highlight produced a decodable 3.88-second copy. Event mapping crossed the removed interval correctly; SHA-256 confirmed the original full-match file was unchanged. These are controlled media fixtures, not new live Alt+Tab acceptance.
 - Public-source previews include only the native settings view; private gameplay previews, profiles and recordings remain excluded from Git.
+
+- The optional Raw Input observer registered keyboard/mouse devices and removed both registrations in a packaged native check without key injection. Actual game input ingestion remains pending. Settings have no save-status label; input recording is opt-in.
 
 ## Important corrections discovered by testing
 
@@ -44,3 +46,8 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 - Long sessions, abrupt termination, low disk, audio-device changes, AMD/Intel GPUs and lower-end systems.
 
 Update the ledger with actual evidence as checks complete; do not convert a pending row into a pass based on code inspection alone.
+
+## Playback overlays and setup
+- 23 controlled checks passed: three layout exports with decoded A/V and original SHA-256 preservation; ordinary-player visibility, timed key state, saved drag/resize, collapse/expand, preset persistence, five onboarding steps, Skip defaults, settings choices and light theme.
+- Exit Echo was exercised through the same durable exit request used by the tray. An isolated paused UI/supervisor/worker group went from three processes to zero and did not respawn. No game recording or key injection was used.
+- APM counts observed presses in the trailing 60 seconds. Old recordings show idle keys and an unavailable APM value. New input recording, chat suppression and Vanguard behavior still need live gameplay acceptance.

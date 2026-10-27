@@ -1,4 +1,4 @@
-param([switch]$BundleRuntime, [string]$ObsDirectory = "$env:ProgramFiles\obs-studio", [string]$OutputDirectory = 'artifacts/app')
+param([switch]$BundleRuntime, [switch]$SelfContained, [string]$ObsDirectory = "$env:ProgramFiles\obs-studio", [string]$OutputDirectory = 'artifacts/app')
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $root
@@ -9,7 +9,8 @@ try {
     dotnet run --project tests/Echo.Tests -c Release --artifacts-path artifacts/build --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
     foreach ($project in @('Echo.App','Echo.Recorder')) {
-        dotnet publish "src/$project/$project.csproj" -c Release --artifacts-path artifacts/build -o $appDirectory --self-contained false --nologo
+        if($SelfContained){dotnet publish "src/$project/$project.csproj" -c Release --artifacts-path artifacts/build -o $appDirectory --self-contained true -r win-x64 --nologo}
+        else{dotnet publish "src/$project/$project.csproj" -c Release --artifacts-path artifacts/build -o $appDirectory --self-contained false --nologo}
         if ($LASTEXITCODE -ne 0) { throw "Publish failed: $project" }
     }
     & "$PSScriptRoot/setup-runtime.ps1" -ObsDirectory $ObsDirectory -AppDirectory $appDirectory -BundleRuntime:$BundleRuntime
