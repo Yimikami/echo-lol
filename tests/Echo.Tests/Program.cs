@@ -1,0 +1,45 @@
+using System.Text.Json;
+using Echo.Core;
+
+int passed = 0, failed = 0;
+void Check(bool condition) { if (!condition) throw new Exception("Assertion failed."); }
+void Test(string name, Action body) { try { body(); passed++; Console.WriteLine("PASS " + name); } catch (Exception e) { failed++; Console.Error.WriteLine("FAIL " + name + ": " + e.Message); } }
+void Throws(Action body) { bool thrown = false; try { body(); } catch (ArgumentException) { thrown = true; } Check(thrown); }
+EchoSettings Settings() => new() { OutputDirectory = Path.GetTempPath() };
+JsonDocument Events(params object[] events) => JsonDocument.Parse(JsonSerializer.Serialize(new { Events = events }));
+object Kill(int id, double time, string killer = "Echo", string victim = "Enemy", string[]? assists = null) => new { EventID = id, EventName = "ChampionKill", EventTime = time, KillerName = killer, VictimName = victim, Assisters = assists ?? [] };
+EventDetector Detector()
+{
+    var detector = new EventDetector();
+    using var initial = JsonDocument.Parse("{\"activePlayer\":{\"riotId\":\"Echo#123\",\"riotIdGameName\":\"Echo\"},\"allPlayers\":[{\"riotId\":\"Echo#123\",\"summonerName\":\"Legacy\"}],\"Events\":[]}");
+    detector.Identify(initial.RootElement); detector.Consume(initial.RootElement, 0, 0, true); return detector;
+}
+Test("default audio is game only", () => { var s = Settings(); Check(s.GameAudio && !s.DesktopAudio && !s.Microphone); });
+Test("valid defaults", () => Settings().Validate());
+Test("reject insufficient replay memory", () => Throws(() => (Settings() with { BufferMegabytes = 32, BitrateKbps = 50000 }).Validate()));
+Test("reject undersized buffer", () => Throws(() => (Settings() with { BufferSeconds = 20 }).Validate()));
+Test("reject odd resolution", () => Throws(() => (Settings() with { Width = 1919 }).Validate()));
+Test("reject software encoder", () => Throws(() => (Settings() with { Encoder = "x264" }).Validate()));
+Test("reject invalid FPS", () => Throws(() => (Settings() with { Fps = 144 }).Validate()));
+Test("kill uses event time not poll arrival", () => { var d = Detector(); using var e = Events(Kill(1, 10)); var m = d.Consume(e.RootElement, 12, 5).Single(); Check(m.Kind == MomentKind.Kill && m.RecordingTime == 3); });
+Test("assist alias matching", () => { var d = Detector(); using var e = Events(Kill(1, 10, "Friend", "Enemy", ["Echo"])); Check(d.Consume(e.RootElement, 10, 10).Single().Kind == MomentKind.Assist); });
+Test("death matching full Riot ID", () => { var d = Detector(); using var e = Events(Kill(1, 10, "Enemy", "Echo#123")); Check(d.Consume(e.RootElement, 10, 10).Single().Kind == MomentKind.Death); });
+Test("legacy player alias", () => { var d = Detector(); using var e = Events(Kill(1, 10, "Legacy")); Check(d.Consume(e.RootElement, 10, 10).Count == 1); });
+Test("ignore other players", () => { var d = Detector(); using var e = Events(Kill(1, 10, "Echo#999")); Check(d.Consume(e.RootElement, 10, 10).Count == 0); });
+Test("deduplicate repeated events", () => { var d = Detector(); using var e = Events(Kill(1, 10)); Check(d.Consume(e.RootElement, 10, 10).Count == 1); Check(d.Consume(e.RootElement, 11, 11).Count == 0); });
+Test("multiple kills in one response survive", () => { var d = Detector(); using var e = Events(Kill(1, 10), Kill(2, 11)); Check(d.Consume(e.RootElement, 12, 12).Count == 2); });
+Test("late start baseline suppresses history", () => { var d = Detector(); using var e = Events(Kill(1, 10)); Check(d.Consume(e.RootElement, 20, 0, true).Count == 0); Check(d.Consume(e.RootElement, 21, 1).Count == 0); });
+Test("stale event before capture is ignored", () => { var d = Detector(); using var e = Events(Kill(1, 10)); Check(d.Consume(e.RootElement, 30, 4).Count == 0); });
+Test("future event can be retried", () => { var d = Detector(); using var e = Events(Kill(1, 30)); Check(d.Consume(e.RootElement, 10, 10).Count == 0); Check(d.Consume(e.RootElement, 30, 30).Count == 1); });
+Test("game clock reset is explicit", () => { var d = Detector(); using var e = Events(); d.Consume(e.RootElement, 100, 100); bool reset = false; try { d.Consume(e.RootElement, 1, 101); } catch (InvalidOperationException) { reset = true; } Check(reset); });
+Test("malformed event is skipped", () => { var d = Detector(); using var e = JsonDocument.Parse("{\"Events\":[{\"EventID\":\"bad\"},{\"EventID\":2,\"EventName\":\"ChampionKill\",\"EventTime\":\"bad\"}]}"); Check(d.Consume(e.RootElement, 10, 10).Count == 0); });
+Test("overlapping moments merge", () => { var p = new MomentPlanner(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); p.Add(new(2, MomentKind.Assist, 25, 25)); Check(p.Ranges.Count == 1 && p.Ranges[0].Start == 5 && p.Ranges[0].End == 33 && p.Ranges[0].Moments.Count == 2); });
+Test("separated moments remain separate", () => { var p = new MomentPlanner(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); p.Add(new(2, MomentKind.Kill, 100, 100)); Check(p.Ranges.Count == 2); });
+Test("disabled event does not schedule", () => { var p = new MomentPlanner(Settings() with { CaptureAssists = false }); p.Add(new(1, MomentKind.Assist, 20, 20)); Check(p.Ranges.Count == 0); });
+Test("planner clamps start at zero", () => { var p = new MomentPlanner(Settings()); p.Add(new(1, MomentKind.Kill, 1, 1)); Check(p.Ranges[0].Start == 0); });
+Test("scheduler waits for tail", () => { var p = new ReplayScheduler(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); Check(p.TakeDue(27) == null); Check(p.TakeDue(28)?.End == 28); Check(p.Pending.Count == 0); });
+Test("force flush clamps unavailable tail", () => { var p = new ReplayScheduler(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); Check(p.TakeDue(22, true)?.End == 22); Check(p.Pending.Count == 0); });
+Test("long fight is split before buffer eviction", () => { var p = new ReplayScheduler(Settings()); for (int i = 20; i <= 45; i += 5) p.Add(new(i, MomentKind.Kill, i, i)); var part = p.TakeDue(42); Check(part != null && part.Start == 5 && part.End == 42); Check(p.Pending.Single().Start == 41); Check(p.TakeDue(53) != null); });
+Test("atomic session roundtrip", () => { var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-tests-" + Guid.NewGuid().ToString("N")); try { var path = Path.Combine(folder, "session.json"); var session = new Session(); JsonStore.Write(path, session); Check(JsonStore.Read<Session>(path)?.Id == session.Id); Check(!File.Exists(path + ".tmp")); } finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); } });
+Console.WriteLine($"{passed} passed, {failed} failed");
+return failed == 0 ? 0 : 1;
