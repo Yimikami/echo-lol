@@ -30,11 +30,14 @@ public sealed record EchoSettings
     public bool CaptureKills { get; init; } = true;
     public bool CaptureAssists { get; init; } = true;
     public bool CaptureDeaths { get; init; } = true;
+    public bool RemoveMaskedHighlights { get; init; } = true;
+    public string ManualShortcut { get; init; } = "Ctrl+Shift+F8";
     public long MinimumFreeMegabytes { get; init; } = 2048;
     public string Encoder { get; init; } = "auto";
 
     public void Validate()
     {
+        _ = ShortcutGesture.Parse(ManualShortcut);
         if (!Enum.IsDefined(Mode)) throw new ArgumentException("Unknown recording mode.");
         if (!Enum.IsDefined(CaptureMethod)) throw new ArgumentException("Unknown capture method.");
         if (Width is < 640 or > 3840 || Height is < 360 or > 2160 || Width % 2 != 0 || Height % 2 != 0)
@@ -67,7 +70,15 @@ public sealed record ClipRange(double Start, double End, List<Moment> Moments)
     public double Duration => End - Start;
     public string Label => string.Join(" · ", Moments.GroupBy(m => m.Kind).Select(g => g.Count() == 1 ? g.Key.ToString() : $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}s"));
 }
-public sealed record MediaClip(string Id, string Path, double Start, double End, string Label, bool IsVirtual, double RecordingOrigin = 0);
+public sealed record MediaSegment(double RecordingStart, double FileStart, double Duration);
+public sealed record TimeRange(double Start, double End) { public double Duration => Math.Max(0, End - Start); }
+public sealed record MediaClip(string Id, string Path, double Start, double End, string Label, bool IsVirtual, double RecordingOrigin = 0)
+{
+    public List<MediaSegment> Segments { get; init; } = [];
+    public int[]? EventIds { get; init; }
+    public bool VideoUnavailable { get; init; }
+    public string? ThumbnailPath { get; init; }
+}
 public sealed record Session
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
@@ -82,6 +93,9 @@ public sealed record Session
     public List<Moment> Moments { get; init; } = [];
     public List<MediaClip> Clips { get; init; } = [];
     public double Duration { get; set; }
+    public List<TimeRange> MaskedRanges { get; set; } = [];
+    public EchoSettings? RecordingOptions { get; set; }
+    public bool PreparationPending { get; set; }
 }
 
 public sealed record RecorderStatus
@@ -98,6 +112,11 @@ public sealed record RecorderStatus
     public int DroppedFrames { get; init; }
     public bool? GameAudioHooked { get; init; }
     public bool? GameForeground { get; init; }
+    public RecordingMode? ActiveMode { get; init; }
+    public bool? DesktopAudioEnabled { get; init; }
+    public bool? MicrophoneEnabled { get; init; }
+    public string? ManualShortcut { get; init; }
+    public string? ShortcutError { get; init; }
     public double CpuPercent { get; init; }
     public double WorkingSetMegabytes { get; init; }
     public double PrivateMegabytes { get; init; }

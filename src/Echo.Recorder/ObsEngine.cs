@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Collections.Concurrent;
 using Echo.Core;
 
 namespace Echo.Recorder;
@@ -11,6 +12,10 @@ internal sealed class ObsEngine : IDisposable
     private bool _started, _com;
     private Native.RenderCallback? _focusGuard;
     private static bool _resolverInstalled;
+    private int _masked;
+    private readonly ConcurrentQueue<(long Timestamp, bool Masked)> _maskChanges = new();
+    public bool VideoMasked => Volatile.Read(ref _masked) != 0;
+    public bool TryMaskChange(out (long Timestamp, bool Masked) change) => _maskChanges.TryDequeue(out change);
     public string Version { get; private set; } = "";
     public string Encoder { get; private set; } = "";
     public IReadOnlyList<string> Encoders { get; private set; } = [];
@@ -116,13 +121,19 @@ internal sealed class ObsEngine : IDisposable
             var processId = target.ProcessId;
             var monitorHandle = Windows.MonitorHandle(target.Handle);
             bool lastVisible = false;
+            Volatile.Write(ref _masked, 1);
             Native.obs_sceneitem_set_visible(item, false);
             _focusGuard = (_, _, _) =>
             {
                 // Exclusive fullscreen can retain a small Win32 window rectangle while its
                 // swap chain owns the monitor. Do not infer capture readiness from that rect.
                 var visible = Windows.IsForeground(processId) && !Windows.IsIconic(target.Handle) && Windows.MonitorHandle(target.Handle) == monitorHandle;
-                if (visible != lastVisible) { Native.obs_sceneitem_set_visible(item, visible); lastVisible = visible; }
+                if (visible != lastVisible)
+                {
+                    Native.obs_sceneitem_set_visible(item, visible); lastVisible = visible;
+                    Volatile.Write(ref _masked, visible ? 0 : 1);
+                    _maskChanges.Enqueue((Stopwatch.GetTimestamp(), !visible));
+                }
             };
             Native.obs_add_main_render_callback(_focusGuard, 0);
         }
@@ -139,7 +150,7 @@ internal sealed class ObsEngine : IDisposable
             _gameAudio = CreateSource("wasapi_process_output_capture", "League audio", data);
             Native.obs_set_output_source(channel++, _gameAudio);
         }
-        if (settings.DesktopAudio && !synthetic)
+        if (settings.DesktopAudio)
         {
             using var data = new ObsData(); data.Set("device_id", "default");
             Native.obs_set_output_source(channel++, CreateSource("wasapi_output_capture", "Desktop audio (opt-in)", data));

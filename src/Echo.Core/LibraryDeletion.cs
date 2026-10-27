@@ -11,6 +11,7 @@ public static class LibraryDeletion
         var metadata = Path.Combine(folder, "session.json");
         var latest = JsonStore.Read<Session>(metadata) ?? throw new IOException("The recording catalog could not be opened.");
         if (latest.EndedAt == null) throw new InvalidOperationException("Wait until this recording has finished.");
+        if (latest.PreparationPending) throw new InvalidOperationException("Wait until this match's clips have finished preparing.");
         var clip = wholeMatch ? null : latest.Clips.SingleOrDefault(c => c.Id == clipId) ?? throw new IOException("This clip has already been removed.");
         var path = wholeMatch ? latest.RecordingPath ?? throw new IOException("The match has already been removed.") : clip!.Path;
         var removed = latest.Clips.Where(c => wholeMatch ? string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase) : c.Id == clipId).ToArray();

@@ -11,6 +11,8 @@ internal static class Program
     {
         string? Arg(string key) { var i = Array.IndexOf(args, key); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         var paths = new HostPaths(Arg("--data-dir"));
+        if (args.Contains("--verify-hotkey")) { ApplicationConfiguration.Initialize(); return GlobalShortcut.VerifyRegistration() ? 0 : 1; }
+        if (args.Contains("--prepare-media")) { MediaPreparation.Prepare(Arg("--metadata") ?? throw new ArgumentException("Provide session metadata."), () => false); return 0; }
         if (args.Contains("--fixture")) { ApplicationConfiguration.Initialize(); Application.Run(new CaptureFixture(int.Parse(Arg("--tone") ?? "440"), args.Contains("--fullscreen"))); return 0; }
         if (args.Contains("--help"))
         {
@@ -36,6 +38,7 @@ internal static class Program
             var pipe = host.ServeAsync();
             var worker = new Thread(host.Watch) { IsBackground = true, Name = "Echo recorder" }; worker.SetApartmentState(ApartmentState.MTA); worker.Start();
             ApplicationConfiguration.Initialize();
+            using var shortcut = new GlobalShortcut(() => host.Enqueue("save"));
             using var appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
             using var tray = new NotifyIcon { Text = "Echo — automatic League capture", Icon = appIcon ?? System.Drawing.SystemIcons.Application, Visible = true };
             var menu = new ContextMenuStrip();
@@ -47,7 +50,12 @@ internal static class Program
             tray.ContextMenuStrip = menu; tray.DoubleClick += (_, _) => OpenUi(paths);
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); Application.Exit(); };
             using var workerMonitor = new System.Windows.Forms.Timer { Interval = 500 };
-            workerMonitor.Tick += (_, _) => { if (!worker.IsAlive) Application.ExitThread(); };
+            workerMonitor.Tick += (_, _) =>
+            {
+                if (!worker.IsAlive) { Application.ExitThread(); return; }
+                try { shortcut.Refresh(paths.LoadSettings().ManualShortcut); host.ShortcutState(shortcut.Active, shortcut.Error); }
+                catch (Exception e) { host.ShortcutState(shortcut.Active, e.Message); }
+            };
             workerMonitor.Start();
             Application.Run();
             cancellation.Cancel(); worker.Join(TimeSpan.FromSeconds(30));
@@ -66,9 +74,10 @@ internal static class Program
         var target = synthetic ? null : Windows.Find(Arg("--window"));
         if (!synthetic && target == null) throw new InvalidOperationException("The selected test window was not found.");
         var settings = paths.LoadSettings() with { Mode = Arg("--mode") == "clips" ? RecordingMode.Clips : RecordingMode.FullMatch,
+            DesktopAudio = args.Contains("--desktop-audio"),
             CaptureMethod = args.Contains("--fullscreen") ? CaptureMethod.FullscreenDisplay : CaptureMethod.Window,
             BeforeSeconds = 3, AfterSeconds = 2, BufferSeconds = 12, BufferMegabytes = 64 };
-        var session = new Session { Mode = settings.Mode, Champion = synthetic ? "Synthetic capture test" : "Window capture test" };
+        var session = new Session { Mode = settings.Mode, RecordingOptions = settings, Champion = synthetic ? "Synthetic capture test" : "Window capture test" };
         var folder = Path.Combine(settings.OutputDirectory, session.Id); Directory.CreateDirectory(folder);
         var planner = new MomentPlanner(settings); var scheduler = new ReplayScheduler(settings);
         using var engine = new ObsEngine(); engine.Initialize(settings, Path.Combine(paths.Root, "native"));

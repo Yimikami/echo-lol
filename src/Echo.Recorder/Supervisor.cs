@@ -54,6 +54,13 @@ internal static class Supervisor
             if (session == null || session.EndedAt != null) return;
             session.State = "Interrupted"; session.EndedAt = DateTimeOffset.UtcNow; session.Duration = status.ElapsedSeconds;
             session.Error = "Native worker ended unexpectedly; recorded files were retained.";
+            if (session.Mode == RecordingMode.FullMatch && session.Clips.Count == 0 && session.RecordingPath is { } matchFile)
+            {
+                var planner = new MomentPlanner(session.RecordingOptions ?? settings);
+                foreach (var moment in session.Moments) planner.Add(moment);
+                foreach (var range in planner.Ranges)
+                    session.Clips.Add(new(Guid.NewGuid().ToString("N"), matchFile, range.Start, Math.Min(range.End, session.Duration), range.Label, true) { EventIds = range.Moments.Select(m => m.EventId).ToArray() });
+            }
             foreach (var clip in session.Clips.ToArray())
             {
                 if (!clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || !File.Exists(clip.Path)) continue;
@@ -67,6 +74,7 @@ internal static class Supervisor
                 catch (Exception) { session.RecordingPath = full; }
             }
             JsonStore.Write(file, session);
+            session.PreparationPending = true; JsonStore.Write(file, session); MediaPreparation.Enqueue(paths, file, session.Id);
         }
         catch (Exception) { /* Recovery must not remove or overwrite any original media. */ }
     }

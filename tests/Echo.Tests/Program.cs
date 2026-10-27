@@ -75,6 +75,12 @@ Test("active recording cannot be deleted", () => LibraryFixture((root, media, me
     try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new Exception("Must not recycle.")); } catch (InvalidOperationException) { blocked = true; }
     Check(blocked && File.Exists(media));
 }));
+Test("preparing media cannot race library deletion", () => LibraryFixture((root, media, metadata, s) =>
+{
+    s.PreparationPending = true; JsonStore.Write(metadata, s); bool blocked = false;
+    try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new Exception("Must not recycle.")); } catch (InvalidOperationException) { blocked = true; }
+    Check(blocked && File.Exists(media) && JsonStore.Read<Session>(metadata)!.Clips.Count == 2);
+}));
 Test("standalone clip deletion recycles its file", () => LibraryFixture((root, media, metadata, s) =>
 {
     s.RecordingPath = null; s.Clips.Clear(); s.Clips.Add(new("standalone", media, 0, 10, "Kill", false)); JsonStore.Write(metadata, s);
@@ -91,5 +97,20 @@ Test("moment preview includes three second lead in", () => Check(PlaybackNavigat
 Test("moment preview maps replay origin", () => Check(PlaybackNavigation.BeforeEvent(115, 100, 0, 25) == 12));
 Test("moment preview clamps to available clip", () => Check(PlaybackNavigation.BeforeEvent(2, 0, 0, 25) == 0));
 Test("moment preview respects trim start", () => Check(PlaybackNavigation.BeforeEvent(15, 0, 14, 25) == 14));
+Test("manual shortcut has canonical modifiers", () => { var key = ShortcutGesture.Parse("shift+ctrl+f8")!; Check(key.Text == "Ctrl+Shift+F8" && key.Modifiers == 6 && key.Key == 0x77); });
+Test("manual shortcut can be disabled", () => Check(ShortcutGesture.Parse("") == null));
+Test("plain gameplay keys are rejected", () => Throws(() => ShortcutGesture.Parse("Q")));
+Test("reserved F12 is rejected", () => Throws(() => ShortcutGesture.Parse("Ctrl+F12")));
+Test("duplicate shortcut modifier is rejected", () => Throws(() => ShortcutGesture.Parse("Ctrl+Ctrl+S")));
+Test("default manual shortcut validates", () => Check(ShortcutGesture.Parse(new EchoSettings().ManualShortcut) != null));
+Test("mask intervals follow actual state transitions", () => { var m = new MaskTimeline(); m.Update(0, false); m.Update(2, true); m.Update(4, true); m.Update(6, false); var r = m.Snapshot(10).Single(); Check(r.Start == 2 && r.End == 6); });
+Test("open mask interval ends with the session", () => { var m = new MaskTimeline(); m.Update(5, true); Check(m.Snapshot(9).Single().End == 9); });
+Test("unmasked highlight stays unchanged", () => { var r = MaskTimeline.Visible(5, 15, []); Check(r.Single() == new TimeRange(5, 15)); });
+Test("masked middle is removed with boundary guard", () => { var r = MaskTimeline.Visible(0, 10, [new(2, 4)]); Check(r.Count == 2 && Math.Abs(r[0].End - 1.94) < .001 && Math.Abs(r[1].Start - 4.06) < .001); });
+Test("fully masked highlight has no visible range", () => Check(MaskTimeline.Visible(2, 4, [new(0, 10)]).Count == 0));
+Test("overlapping masks do not duplicate footage", () => { var r = MaskTimeline.Visible(0, 10, [new(2, 5), new(4, 7)], 0); Check(r.SequenceEqual([new TimeRange(0, 2), new TimeRange(7, 10)])); });
+Test("masks outside a highlight are ignored", () => Check(MaskTimeline.Visible(10, 20, [new(0, 5), new(25, 30)]).Single() == new TimeRange(10, 20)));
+Test("cleaned event maps through discontinuous segments", () => { var c = new MediaClip("a", "x", 0, 15, "Kill", false) { Segments = [new(0, 0, 5), new(10, 5, 10)] }; Check(PlaybackNavigation.FileTime(c, 12) == 7 && PlaybackNavigation.BeforeEvent(c, 12, 0, 15) == 4); });
+Test("event inside removed video is not a false marker", () => { var c = new MediaClip("a", "x", 0, 15, "Kill", false) { Segments = [new(0, 0, 5), new(10, 5, 10)] }; Check(PlaybackNavigation.FileTime(c, 8) == null); });
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

@@ -13,6 +13,8 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
     private double _lastWall, _lastCpu, _cpu;
     private bool _armed = initiallyArmed;
+    private string? _shortcut, _shortcutError;
+    public void ShortcutState(string? shortcut, string? error) { Volatile.Write(ref _shortcut, shortcut); Volatile.Write(ref _shortcutError, error); }
     private RecorderStatus _status = (JsonStore.Read<RecorderStatus>(paths.Status) ?? new()) with { Recording = false };
     public void Enqueue(string command) => _commands.Enqueue(command);
 
@@ -56,6 +58,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             }
             var observedWindow = Windows.Find();
             var target = _armed ? observedWindow : null;
+            if (observedWindow == null) MediaPreparation.TakeOne(paths, () => cancellation.IsCancellationRequested || Windows.Find() != null);
             if (target == null) failedProcess = -1;
             if (target == null || Windows.IsIconic(target.Handle) || target.ProcessId == failedProcess)
             {
@@ -92,32 +95,34 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
 
     private void Record(EchoSettings settings, CaptureWindow target, LeagueClient league, JsonElement initial)
     {
-        var session = new Session { Mode = settings.Mode };
+        var session = new Session { Mode = settings.Mode, RecordingOptions = settings };
         var folder = Path.Combine(settings.OutputDirectory, session.Id);
         Directory.CreateDirectory(folder);
         var metadata = Path.Combine(folder, "session.json");
+        if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
         JsonStore.Write(metadata, session);
-        Publish(_status with { Armed = _armed, Recording = false, State = "Starting recording", SessionId = session.Id, ElapsedSeconds = 0, Frames = 0, Error = null });
+        Publish(_status with { Armed = _armed, Recording = false, State = "Starting recording", SessionId = session.Id, ElapsedSeconds = 0, Frames = 0, Error = null, ActiveMode = settings.Mode, DesktopAudioEnabled = settings.DesktopAudio, MicrophoneEnabled = settings.Microphone });
         var timeline = new MomentPlanner(settings); var pending = new ReplayScheduler(settings); var detector = new EventDetector();
         detector.Identify(initial);
         var initialTime = initial.GetProperty("gameData").GetProperty("gameTime").GetDouble();
         detector.Consume(initial, initialTime, 0, baseline: true);
         using var engine = new ObsEngine();
-        var clock = new Stopwatch();
+        var clock = new Stopwatch(); var masking = new MaskTimeline(); long recordingOriginTicks = 0;
         try
         {
             CheckDisk(settings);
             engine.Initialize(settings, Path.Combine(paths.Root, "native"));
             engine.Start(settings, target, folder);
             session.Encoder = engine.Encoder;
-            clock.Start();
-            if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
+            clock.Start(); recordingOriginTicks = Stopwatch.GetTimestamp() - clock.ElapsedTicks;
+            masking.Update(0, engine.VideoMasked);
             double nextPoll = 0, nextStatus = 0, nextDisk = 0, gameTime = initialTime;
             double? noVideoSince = null;
             int disconnected = 0, manualId = -1;
             while (!cancellation.IsCancellationRequested && _armed)
             {
                 var now = clock.Elapsed.TotalSeconds;
+                DrainMasking();
                 while (_commands.TryDequeue(out var cmd))
                 {
                     if (cmd == "disarm") _armed = false;
@@ -167,8 +172,9 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                     Publish(new() { Armed = _armed, Recording = true, State = settings.CaptureMethod == CaptureMethod.FullscreenDisplay && !Windows.IsForeground(target.ProcessId) ? "Game unfocused — video masked" : Windows.IsIconic(target.Handle) ? "Game minimized — video may pause" : !engine.HasVideo ? "Waiting for game video" : "Recording", Encoder = engine.Encoder,
                         NativeVersion = engine.Version, ElapsedSeconds = now, Frames = engine.Frames, DroppedFrames = engine.DroppedFrames,
                         SessionId = session.Id, GameAudioHooked = hooked, GameForeground = Windows.IsForeground(target.ProcessId),
+                        ActiveMode = settings.Mode, DesktopAudioEnabled = settings.DesktopAudio, MicrophoneEnabled = settings.Microphone,
                         Error = settings.GameAudio && now > 10 && hooked == false ? "Game audio has not attached. Desktop audio remains off unless enabled." : null });
-                    session.Duration = now; JsonStore.Write(metadata, session); nextStatus = now + 1;
+                    session.Duration = now; session.MaskedRanges = masking.Snapshot(now); JsonStore.Write(metadata, session); nextStatus = now + 1;
                 }
                 cancellation.WaitHandle.WaitOne(100);
             }
@@ -183,35 +189,25 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         }
         finally
         {
-            engine.Stop();
-            engine.Dispose(); // Release capture and GPU rendering before remux/thumbnail work.
+            engine.Stop(); DrainMasking();
             session.Duration = clock.Elapsed.TotalSeconds; session.EndedAt = DateTimeOffset.UtcNow;
-            Publish(_status with { Recording = false, State = "Finalizing recording" });
-            try
+            session.MaskedRanges = masking.Snapshot(session.Duration);
+            if (session.Mode == RecordingMode.FullMatch && session.RecordingPath is { } match)
+                foreach (var range in timeline.Ranges)
+                    session.Clips.Add(new(Guid.NewGuid().ToString("N"), match, range.Start, Math.Min(range.End, session.Duration), range.Label, true) { EventIds = range.Moments.Select(m => m.EventId).ToArray() });
+            session.PreparationPending = true;
+            JsonStore.Write(metadata, session); MediaPreparation.Enqueue(paths, metadata, session.Id);
+            Publish(_status with { Recording = false, State = "Preparing clips" });
+            engine.Dispose(); // Each native worker has exactly one capture lifecycle.
+        }
+        void DrainMasking()
+        {
+            if (recordingOriginTicks == 0) return;
+            while (engine.TryMaskChange(out var change))
             {
-                if (session.RecordingPath is { } source && File.Exists(source))
-                {
-                    var mp4 = MediaTools.Remux(source); session.RecordingPath = mp4; session.Duration = MediaTools.Duration(mp4);
-                    foreach (var range in timeline.Ranges)
-                        session.Clips.Add(new(Guid.NewGuid().ToString("N"), mp4, range.Start, Math.Min(range.End, session.Duration), range.Label, true));
-                    File.Delete(source); // Only our own finalized intermediate; validated MP4 is retained.
-                }
-                foreach (var clip in session.Clips.ToArray())
-                {
-                    var clipSource = clip.Path;
-                    if (clipSource.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var mp4 = MediaTools.Remux(clipSource);
-                        var index = session.Clips.IndexOf(clip);
-                        session.Clips[index] = clip with { Path = mp4 };
-                        File.Delete(clipSource);
-                    }
-                }
-                foreach (var clip in session.Clips)
-                    MediaTools.Thumbnail(clip.Path, Path.Combine(folder, clip.Id + ".jpg"), clip.Start + Math.Min(2, (clip.End - clip.Start) / 2));
+                var time = (change.Timestamp - recordingOriginTicks) / (double)Stopwatch.Frequency;
+                if (time >= 0) masking.Update(time, change.Masked);
             }
-            catch (Exception e) { session.Error = "Recording retained; media preparation needs attention: " + e.Message; Console.Error.WriteLine(e.Message); }
-            JsonStore.Write(metadata, session);
         }
         void Add(Moment moment)
         {
@@ -239,7 +235,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         var origin = requestTime - duration;
         var start = Math.Max(0, range.Start - origin); var end = Math.Min(duration, range.End - origin);
         if (end <= start) throw new InvalidDataException("Replay timestamps could not be mapped to the saved file.");
-        session.Clips.Add(new(Guid.NewGuid().ToString("N"), saved, start, end, range.Label.Length == 0 ? "Continued moment" : range.Label, false, origin));
+        session.Clips.Add(new(Guid.NewGuid().ToString("N"), saved, start, end, range.Label.Length == 0 ? "Continued moment" : range.Label, false, origin) { EventIds = range.Moments.Select(m => m.EventId).ToArray() });
     }
     private static bool ProcessExists(int id) { try { using var p = Process.GetProcessById(id); return !p.HasExited; } catch (ArgumentException) { return false; } }
     private static void CheckDisk(EchoSettings settings)
@@ -252,7 +248,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         _process.Refresh(); var wall = _uptime.Elapsed.TotalSeconds; var cpu = _process.TotalProcessorTime.TotalSeconds;
         if (wall > _lastWall) _cpu = (cpu - _lastCpu) / (wall - _lastWall) / Environment.ProcessorCount * 100;
         _lastCpu = cpu; _lastWall = wall;
-        _status = status with { CpuPercent = Math.Round(_cpu, 2), WorkingSetMegabytes = Math.Round(_process.WorkingSet64 / 1048576d, 1),
+        _status = status with { ManualShortcut = Volatile.Read(ref _shortcut), ShortcutError = Volatile.Read(ref _shortcutError), CpuPercent = Math.Round(_cpu, 2), WorkingSetMegabytes = Math.Round(_process.WorkingSet64 / 1048576d, 1),
             PrivateMegabytes = Math.Round(_process.PrivateMemorySize64 / 1048576d, 1), UpdatedAt = DateTimeOffset.UtcNow };
         JsonStore.Write(paths.Status, _status);
     }
