@@ -14,7 +14,7 @@
       <SolidColorBrush x:Key="LineBrush" Color="#465269"/>
       <SolidColorBrush x:Key="TextBrush" Color="#F6F8FC"/>
       <SolidColorBrush x:Key="SecondaryBrush" Color="#BDC7D7"/>
-      <SolidColorBrush x:Key="AccentBrush" Color="#A9C9FF"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="#A9C9FF"/><SolidColorBrush x:Key="AccentTextBrush" Color="#15203B"/>
       <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
         <Setter Property="FontWeight" Value="Medium"/>
@@ -24,8 +24,8 @@
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        <Setter Property="Background" Value="#2A3444"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
         <Setter Property="BorderBrush" Value="#383C45"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="15,10"/>
@@ -47,7 +47,7 @@
                   <Setter TargetName="Surface" Property="Opacity" Value="0.72"/>
                 </Trigger>
                 <Trigger Property="IsKeyboardFocused" Value="True">
-                  <Setter TargetName="Surface" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                   <Setter TargetName="Surface" Property="Opacity" Value="0.38"/>
@@ -66,9 +66,9 @@
         <Setter Property="BorderBrush" Value="Transparent"/>
       </Style>
       <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Foreground" Value="#15203B"/>
-        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
       </Style>
       <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="Transparent"/>
@@ -87,11 +87,11 @@
       <Style TargetType="TextBox">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
       <Setter Property="FontWeight" Value="Medium"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        <Setter Property="Background" Value="#202228"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
         <Setter Property="BorderBrush" Value="#3A3E48"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="SelectionBrush" Value="#516A9F"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Padding" Value="12,9"/>
@@ -104,7 +104,7 @@
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsKeyboardFocused" Value="True">
-                  <Setter TargetName="Surface" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                  <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                   <Setter TargetName="Surface" Property="Opacity" Value="0.4"/>
@@ -115,19 +115,24 @@
         </Setter>
       </Style>
       <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+        <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
       <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
         <Setter Property="MinHeight" Value="40"/>
         <Setter Property="Padding" Value="12,9"/>
       </Style>
-      <Style TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
+      <Style TargetType="ComboBoxItem"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Padding" Value="12,9"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Item" Background="{DynamicResource PanelBrush}" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource RaisedBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+      <Style TargetType="CheckBox">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
       <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><StackPanel Orientation="Horizontal"><Border x:Name="Box" Width="19" Height="19" CornerRadius="4" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"><Path x:Name="Tick" Data="{StaticResource Phosphor.Check}" Fill="{DynamicResource AccentTextBrush}" Width="14" Height="14" Stretch="Uniform" Visibility="Collapsed"/></Border><ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/></StackPanel><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="White"/><Setter TargetName="Box" Property="BorderThickness" Value="2"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
       </Style>
       <Style x:Key="Switch" TargetType="CheckBox">
         <Setter Property="Width" Value="42"/>
@@ -141,7 +146,7 @@
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                  <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentBrush}"/>
+                  <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}"/>
                   <Setter TargetName="Knob" Property="Fill" Value="#1B2A49"/>
                   <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
                 </Trigger>
@@ -169,7 +174,7 @@
                       <RepeatButton.Template>
                         <ControlTemplate TargetType="RepeatButton">
                           <Border Background="Transparent">
-                            <Border Height="3" VerticalAlignment="Center" CornerRadius="1.5" Background="{StaticResource AccentBrush}"/>
+                            <Border Height="3" VerticalAlignment="Center" CornerRadius="1.5" Background="{DynamicResource AccentBrush}"/>
                           </Border>
                         </ControlTemplate>
                       </RepeatButton.Template>
@@ -202,7 +207,7 @@
         </Setter>
       </Style>
       <Style x:Key="Hint" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource SecondaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="LineHeight" Value="19"/>
@@ -213,7 +218,7 @@
       </Style>
       <Style x:Key="SettingRow" TargetType="Border">
         <Setter Property="Padding" Value="0,22"/>
-        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
       </Style>
       <Style TargetType="ToolTip">
@@ -221,7 +226,7 @@
       <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Background" Value="#2A2D34"/>
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
         <Setter Property="Padding" Value="10,7"/>
       </Style>
     </ResourceDictionary>

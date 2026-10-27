@@ -64,9 +64,11 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
         _timer.Tick += (_, _) => Tick(); _timer.Start();
         Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
+        _overlayReady=true;
     }
     private void Tick()
     {
+        if (App.IsExiting) return;
         if (++_ticks % 5 == 0) RefreshStatus();
         if (_ticks % 25 == 0)
         {
@@ -78,6 +80,7 @@ public partial class MainWindow : Window
         _updating = true; Seek.Value = position; _updating = false;
         if (Math.Abs(Timeline.Position - position) > .01) { Timeline.Position = position; Timeline.InvalidateVisual(); }
         UpdatePlaybackTime(position);
+        UpdatePlaybackInputs(position);
         if (_playing && position >= Timeline.SelectionEnd) SetPlaying(false);
     }
     private bool CaptureActive()
@@ -100,6 +103,7 @@ public partial class MainWindow : Window
             ErrorBanner.Text = _status.Error ?? "";
             ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
             ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
+            QuickExportButton.IsEnabled=ExportButton.IsEnabled;
             ExportButton.ToolTip = CaptureActive() ? "Export is available after the match." : "Save the selected range as a new MP4";
             ExportHint.Text = CaptureActive() ? "Finish your match to export clips." : "Save your selection as a new MP4.";
             DeleteButton.IsEnabled = _selected != null && !_exporting;
@@ -189,6 +193,7 @@ public partial class MainWindow : Window
         OpenEditor();
         if (_selected?.Clip.Id == item.Clip.Id && _selected.Clip.Path == item.Clip.Path) { _selected = item; return; }
         _selectionVersion++; _selected = item; _duration = 0; SetPlaying(false); Player.Close(); EmptyPlayer.Visibility = Visibility.Collapsed;
+        LoadInputData(item);
         SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Label;
         Timeline.Frames = item.Thumbnail == null ? [] : [item.Thumbnail]; Timeline.Duration = 0; Timeline.InvalidateVisual();
         PlayerPoster.Source = item.Thumbnail; PlayerPoster.Visibility = item.Thumbnail == null ? Visibility.Collapsed : Visibility.Visible;
@@ -272,6 +277,7 @@ public partial class MainWindow : Window
         var at = Math.Clamp(seconds, 0, _duration); Player.Position = TimeSpan.FromSeconds(at); PlayerPoster.Visibility = Visibility.Collapsed;
         Timeline.Position = at; Timeline.InvalidateVisual(); _updating = true; Seek.Value = at; _updating = false;
         UpdatePlaybackTime(at);
+        UpdatePlaybackInputs(at);
     }
     private void PreviewMoment(double recordingTime)
     {
@@ -337,7 +343,7 @@ public partial class MainWindow : Window
     {
         if (_updating || _closing) return;
         _settingsDirty = true; _settingsTimer.Stop();
-        if (debounce) { SettingsMessage.Text = "Saving…"; _settingsTimer.Start(); }
+        if (debounce) { _settingsTimer.Start(); }
         else SaveSettingsClick(this, new());
     }
     private void ShortcutKeyDown(object sender, KeyEventArgs e)
@@ -431,22 +437,24 @@ public partial class MainWindow : Window
         catch (Exception ex) { DeleteDescription.Text = "Could not delete: " + ex.Message; }
         finally { _deleting = false; ConfirmDeleteButton.IsEnabled = true; CancelDeleteButton.IsEnabled = true; }
     }
-    private void RevealClick(object sender, RoutedEventArgs e) { if (_selected == null) return; var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false }; info.ArgumentList.Add("/select," + _selected.Clip.Path); Process.Start(info); }
+    private void RevealClick(object sender, RoutedEventArgs e) { if (_selected == null) return; try { FolderReveal.Show(_selected.Clip.Path); } catch (Exception ex) { ShowToast("Could not open folder: " + ex.Message); } }
     private async Task EnsureRecorder(bool resumeOnOpen = false)
     {
-        if (_reconnecting || _closing) return;
+        if (_reconnecting || _closing || App.IsExiting) return;
         _reconnecting = true;
         try
         {
             if (await Command("status")) { if (resumeOnOpen && !_status.Armed && _status.Error == null) await Command("arm"); return; }
+            if (App.IsExiting) return;
             var file = Path.Combine(AppContext.BaseDirectory, "Echo.Recorder.exe");
             if (!File.Exists(file)) { ErrorBanner.Text = "Recorder is missing. Run scripts/build.ps1 to assemble Echo."; return; }
-            var info = new ProcessStartInfo(file) { UseShellExecute = false, CreateNoWindow = true }; info.ArgumentList.Add("--data-dir"); info.ArgumentList.Add(_paths.Root); Process.Start(info)?.Dispose();
+            var info = new ProcessStartInfo(file) { UseShellExecute = false, CreateNoWindow = true }; info.ArgumentList.Add("--data-dir"); info.ArgumentList.Add(_paths.Root); if(App.IsShutdownProbe)info.ArgumentList.Add("--paused"); Process.Start(info)?.Dispose();
             await Task.Delay(1000); RefreshStatus();
         }
         catch (Exception e) { ErrorBanner.Text = "Recorder could not start: " + e.Message; }
         finally { _reconnecting = false; }
     }
+    internal Task StartShutdownProbe() => EnsureRecorder(false);
     private async Task<bool> Command(string command)
     {
         try
@@ -504,10 +512,10 @@ public partial class MainWindow : Window
     private void ShowSettingsCategory(string category)
     {
         _settingsCategory = category;
-        foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory })
+        foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory,InputsCategory })
         {
-            button.Background = (string)button.Tag == category ? new SolidColorBrush(Color.FromRgb(39, 45, 58)) : Brushes.Transparent;
+            button.Background = (string)button.Tag == category ? (Brush)FindResource("RaisedBrush") : Brushes.Transparent;
             button.Foreground = (Brush)FindResource((string)button.Tag == category ? "TextBrush" : "SecondaryBrush");
         }
         SettingsScroll.ScrollToTop();
@@ -520,51 +528,23 @@ public partial class MainWindow : Window
     private async void ExportClick(object sender, RoutedEventArgs e)
     {
         if (_selected == null || _exporting || CaptureActive()) return;
-        var dialog = new SaveFileDialog { Title = "Export clip", Filter = "MP4 video|*.mp4", FileName = $"Echo-{_selected.Session.StartedAt:yyyyMMdd-HHmm}-{_selected.Clip.Id[..6]}.mp4", AddExtension = true, OverwritePrompt = true };
-        if (dialog.ShowDialog(this) != true) return;
-        if (File.Exists(dialog.FileName)) { ActionStatus.Text = "Choose a new filename; Echo keeps existing videos intact."; return; }
-        var input = _selected.Clip.Path; var start = Timeline.SelectionStart; var length = Timeline.SelectionEnd - start;
-        var nativeEncoder = _selected.Session.Encoder ?? _status.Encoder ?? "nvenc";
-        string[] videoArgs = nativeEncoder.Contains("amf", StringComparison.OrdinalIgnoreCase)
-            ? ["-c:v", "h264_amf", "-quality", "speed", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20"]
-            : nativeEncoder.Contains("qsv", StringComparison.OrdinalIgnoreCase)
-            ? ["-c:v", "h264_qsv", "-preset", "fast", "-global_quality", "20"]
-            : ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "20"];
-        if (length < .1) return;
-        _exporting = true; ExportButton.IsEnabled = false; ActionStatus.Text = "Exporting your clip…";
-        var temp = dialog.FileName + ".echo-partial";
-        try
-        {
-            await Task.Run(async () =>
-            {
-                var info = new ProcessStartInfo(MediaTools.Find("ffmpeg")) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
-                foreach (var arg in new[] { "-hide_banner", "-v", "error", "-n", "-ss", start.ToString("0.###", CultureInfo.InvariantCulture), "-i", input, "-t", length.ToString("0.###", CultureInfo.InvariantCulture), "-map", "0:v:0", "-map", "0:a?" }.Concat(videoArgs).Concat(["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4", temp])) info.ArgumentList.Add(arg);
-                using var p = Process.Start(info) ?? throw new InvalidOperationException("FFmpeg could not start.");
-                p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                var errors = p.StandardError.ReadToEndAsync(); var watch = Stopwatch.StartNew();
-                while (!p.HasExited)
-                {
-                    if (_closing) { p.Kill(true); throw new OperationCanceledException("Export stopped because Echo closed."); }
-                    if (CaptureActive()) { p.Kill(true); throw new OperationCanceledException("Export stopped because a recording started. Try again after the match."); }
-                    if (watch.Elapsed.TotalMinutes > 15) { p.Kill(true); throw new TimeoutException("Export took too long."); }
-                    await Task.Delay(250);
-                }
-                if (p.ExitCode != 0) throw new InvalidOperationException(await errors);
-                _ = MediaTools.Duration(temp); File.Move(temp, dialog.FileName);
-            });
-            ActionStatus.Text = "Exported: " + dialog.FileName;
-        }
-        catch (Exception ex) { ActionStatus.Text = "Export could not finish: " + ex.Message[..Math.Min(400, ex.Message.Length)]; }
-        finally { _exporting = false; if (File.Exists(temp)) File.Delete(temp); RefreshStatus(); }
+        var dialog=new SaveFileDialog{Title="Export clip",Filter="MP4 video|*.mp4",FileName=$"Echo-{_selected.Session.StartedAt:yyyyMMdd-HHmm}-{_selected.Clip.Id[..6]}.mp4",AddExtension=true,OverwritePrompt=true};
+        if(dialog.ShowDialog(this)!=true)return;
+        var item=_selected;var start=Timeline.SelectionStart;var end=Timeline.SelectionEnd;var preset=_inputPreset;
+        _exporting=true;QuickExportButton.IsEnabled=ExportButton.IsEnabled=false;
+        try{ShowToast("Exporting clip…");await Task.Run(()=>ClipExport.Save(item.Clip,start,end,item.Session.InputLogPath,item.Session.Encoder,preset,dialog.FileName,Path.Combine(_paths.Root,"export-cache"),()=>_closing||App.IsExiting||CaptureActive()));ShowToast("Exported "+Path.GetFileName(dialog.FileName));}
+        catch(OperationCanceledException){ShowToast("Export stopped. Your original clip is unchanged.");}
+        catch(Exception ex){ShowToast("Could not export: "+ex.Message[..Math.Min(300,ex.Message.Length)]);}
+        finally{_exporting=false;RefreshStatus();}
     }
-
-
     private void LoadSettingsFields()
     {
         ModeBox.SelectedIndex = _settings.Mode == RecordingMode.Clips ? 0 : 1; GameAudioBox.IsChecked = _settings.GameAudio; DesktopAudioBox.IsChecked = _settings.DesktopAudio; MicBox.IsChecked = _settings.Microphone;
         CaptureMethodBox.SelectedIndex = _settings.CaptureMethod == CaptureMethod.Window ? 0 : 1;
         KillsBox.IsChecked = _settings.CaptureKills; AssistsBox.IsChecked = _settings.CaptureAssists; DeathsBox.IsChecked = _settings.CaptureDeaths;
         ShortcutInput.Text = _settings.ManualShortcut; RemoveMaskedBox.IsChecked = _settings.RemoveMaskedHighlights;
+        RecordInputsBox.IsChecked = _settings.RecordInputs;
+        LoadOverlayFields();
         BeforeInput.Text = _settings.BeforeSeconds.ToString(CultureInfo.InvariantCulture); AfterInput.Text = _settings.AfterSeconds.ToString(CultureInfo.InvariantCulture);
         ResolutionBox.SelectedIndex = _settings.Height == 720 ? 0 : 1; FpsBox.SelectedIndex = _settings.Fps == 30 ? 0 : 1; OutputInput.Text = _settings.OutputDirectory;
     }
@@ -576,14 +556,15 @@ public partial class MainWindow : Window
             var before = int.Parse(BeforeInput.Text, CultureInfo.InvariantCulture); var after = int.Parse(AfterInput.Text, CultureInfo.InvariantCulture);
             var buffer = Math.Max(40, before + after + 5);
             var settings = _settings with { Mode = ModeBox.SelectedIndex == 0 ? RecordingMode.Clips : RecordingMode.FullMatch, CaptureMethod = CaptureMethodBox.SelectedIndex == 0 ? CaptureMethod.Window : CaptureMethod.FullscreenDisplay, GameAudio = GameAudioBox.IsChecked == true,
-                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
+                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, RecordInputs = RecordInputsBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
                 CaptureDeaths = DeathsBox.IsChecked == true, BeforeSeconds = before, AfterSeconds = after, BufferSeconds = buffer,
                 BufferMegabytes = Math.Max(128, (int)Math.Ceiling(_settings.BitrateKbps * 1000d / 8 * buffer * 1.3 / 1048576)),
-                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim() };
+                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim(),InputOverlay=ReadOverlayFields(),Theme=ThemeBox.SelectedIndex==1?"Light":ThemeBox.SelectedIndex==2?"System":"Dark" };
             settings.Validate(); JsonStore.Write(_paths.Settings, settings); _settings = settings;
-            SettingsError.Text = ""; SettingsMessage.Text = CaptureActive() ? "Saved. Recording changes apply next match." : "Saved"; _settingsDirty = false; _catalogSignature = "";
+            _inputPreset=settings.InputOverlay;ThemeService.Apply(settings.Theme);RefreshOverlayPreview();UpdatePlaybackInputs(Player.Position.TotalSeconds);
+            SettingsError.Text = ""; _settingsDirty = false; _catalogSignature = "";
         }
-        catch (Exception ex) when (ex is ArgumentException or FormatException or OverflowException or IOException or UnauthorizedAccessException) { SettingsError.Text = ex.Message; SettingsMessage.Text = "Settings were not saved."; }
+        catch (Exception ex) when (ex is ArgumentException or FormatException or OverflowException or IOException or UnauthorizedAccessException) { SettingsError.Text = ex.Message; }
     }
 
 

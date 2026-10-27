@@ -21,6 +21,7 @@ public partial class MainWindow
         var faultCommands = await VerifyStartupCommands(Path.Combine(output, "fault-profile"), true);
         Check("native faults stay actionable instead of looping", faultCommands.SequenceEqual(["status"]));
         Check("Phosphor vector assets resolve", TryFindResource("Phosphor.Play") is Geometry);
+        Check("settings have no automatic-save status label", FindName("SettingsMessage") == null);
         Check("Manrope is embedded and resolves", FontFamily.GetTypefaces().Any(t => t.TryGetGlyphTypeface(out var glyph) && glyph.FamilyNames.Values.Any(n => n.Contains("Manrope", StringComparison.OrdinalIgnoreCase))));
         RefreshCatalog(true);
         Check("library opens as gallery without forcing the editor", EditorPanel.Visibility == Visibility.Collapsed && LibraryPanel.Visibility == Visibility.Visible);
@@ -66,11 +67,11 @@ public partial class MainWindow
                 Check($"editor fits {size.Width}px", VideoSurface.ActualWidth >= 600 && VideoSurface.ActualHeight >= 200 && TrimWorkbench.ActualWidth >= 900);
             }
             SettingsClick(this, new());
-            foreach (var category in new[] { "Recording", "Audio", "Highlights", "Storage" })
+            foreach (var category in new[] { "Recording", "Audio", "Highlights", "Storage","Inputs" })
             {
                 ShowSettingsCategory(category);
                 await RenderPreview(Path.Combine(output, $"settings-{category.ToLowerInvariant()}-{size.Width}.png"), size);
-                Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
+                Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings,InputSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
             }
         }
         var testPaths = new HostPaths(Path.Combine(output, "settings-profile")); var probe = new MainWindow(testPaths, false);
@@ -86,6 +87,8 @@ public partial class MainWindow
             Check("entire match selection saves immediately", JsonStore.Read<EchoSettings>(testPaths.Settings)?.Mode == RecordingMode.FullMatch);
             probe.ShortcutInput.Text = "Ctrl+Alt+F9"; probe.AutoSave(false);
             Check("manual shortcut is saved with settings", JsonStore.Read<EchoSettings>(testPaths.Settings)?.ManualShortcut == "Ctrl+Alt+F9");
+            probe.RecordInputsBox.IsChecked = true;
+            Check("gameplay input recording is explicitly opt-in and persists", JsonStore.Read<EchoSettings>(testPaths.Settings)?.RecordInputs == true);
             var match = new Session { Mode = RecordingMode.FullMatch, RecordingPath = Path.Combine(testPaths.Root, "live.mkv") };
             var matchFolder = Path.Combine(probe._settings.OutputDirectory, match.Id); Directory.CreateDirectory(matchFolder); JsonStore.Write(Path.Combine(matchFolder, "session.json"), match);
             probe._matches = true; probe.RefreshCatalog(true);
