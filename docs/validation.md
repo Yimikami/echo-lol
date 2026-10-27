@@ -14,8 +14,9 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 - MP4 range-export engine exercised on a recorded fixture independently of the UI; full interactive export acceptance remains pending.
 - Live fullscreen practice session: **28 kill events, 1 death event and 15 saved clips** in a completed recording session of about 9 minutes. A saved frame was visually verified as actual League gameplay. Assist detection remains fixture-verified; this solo practice session did not establish live assist acceptance.
 - Public repository published at https://github.com/Yimikami/echo-lol; Windows CI passed on the earlier published recording/library revisions. New fixes must be checked at their own commit.
-- WPF UI 4.3.0 and Fluent System Icons now theme native controls, including dropdowns and search. Two bounded offscreen visual-tree render rounds covered 1480×920 and 1100×720 with real local metadata/posters and a bounded filmstrip; the second confirmed corrected dark themes. These renders do not control or screenshot the desktop.
-- Eleven normal-user-context behavior checks passed: automatic resume without Record, preserving an actionable native fault, catalog loading, playback volume/mute, fullscreen layout entry/exit, event lead-in, and delete confirmation/cancellation. Four additional layout assertions passed in the earlier render run. The same pipe check in the restricted execution context was rejected by OS pipe access; its normal-user-context run passed. This distinction is retained rather than treating the restricted run as product evidence.
+- Studio redesign: a native gallery, dedicated editor and four settings categories rendered at 1480×920 and 1100×720. Manrope and regular Phosphor vectors resolve from bundled assets. These are offscreen application renders, not desktop screenshots or gameplay evidence.
+- Thirty-four UI checks passed across both sizes: automatic startup, font/icon resources, gallery/editor/back navigation, playback volume/mute, visible volume-track geometry, fullscreen layout, event lead-in, delete confirmation/cancellation, settings categories/validation/persistence, bounded pagination and search reset. The final package passed the 20-check non-render behavior subset.
+- Public-source previews include only the native settings view; private gameplay previews, profiles and recordings remain excluded from Git.
 
 ## Important corrections discovered by testing
 
@@ -34,7 +35,7 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 - Real exclusive fullscreen capture and Alt+Tab masking; fullscreen display support has been implemented but must not yet be presented as validated compatibility/privacy.
 - Paired PresentMon gameplay samples were interrupted and then cancelled at the user's request. No FPS-regression percentage is established; the user will provide normal-use feedback.
 - Live playback/fullscreen/taskbar behavior, interactive trim export, Windows Recycle Bin integration and library-close survival after the latest UI changes. Layout and control-handler checks have passed; they do not replace real desktop acceptance.
-- Final Windows CI on the latest containment fixes.
+- Match GitHub Actions results to the exact revision being reviewed; earlier CI is not evidence for a later change.
 - Long sessions, abrupt termination, low disk, audio-device changes, AMD/Intel GPUs and lower-end systems.
 
 Update the ledger with actual evidence as checks complete; do not convert a pending row into a pass based on code inspection alone.

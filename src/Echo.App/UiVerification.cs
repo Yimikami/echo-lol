@@ -17,45 +17,79 @@ public partial class MainWindow
         var checks = new List<string>();
         void Check(string name, bool pass) { if (!pass) throw new InvalidOperationException(name); checks.Add("PASS " + name); }
         var startupCommands = await VerifyStartupCommands(Path.Combine(output, "startup-profile"), false);
-        Check("opening Echo resumes healthy paused capture without pressing Record", startupCommands.SequenceEqual(["status", "arm"]));
+        Check("opening Echo resumes capture without pressing Record", startupCommands.SequenceEqual(["status", "arm"]));
         var faultCommands = await VerifyStartupCommands(Path.Combine(output, "fault-profile"), true);
-        Check("opening Echo preserves an actionable native fault instead of a crash loop", faultCommands.SequenceEqual(["status"]));
+        Check("native faults stay actionable instead of looping", faultCommands.SequenceEqual(["status"]));
+        Check("Phosphor vector assets resolve", TryFindResource("Phosphor.Play") is Geometry);
+        Check("Manrope is embedded and resolves", FontFamily.GetTypefaces().Any(t => t.TryGetGlyphTypeface(out var glyph) && glyph.FamilyNames.Values.Any(n => n.Contains("Manrope", StringComparison.OrdinalIgnoreCase))));
         RefreshCatalog(true);
-        if (_selected != null)
+        Check("library opens as gallery without forcing the editor", EditorPanel.Visibility == Visibility.Collapsed && LibraryPanel.Visibility == Visibility.Visible);
+        if (ClipList.Items.Count > 0)
         {
-            _duration = Math.Max(.1, _selected.Clip.End);
-            Timeline.Duration = _duration; Timeline.SelectionStart = _selected.Clip.Start; Timeline.SelectionEnd = _selected.Clip.End;
-            Timeline.Moments = _selected.Session.Moments.Select(m => (m.RecordingTime - _selected.Clip.RecordingOrigin, m.Kind)).ToArray();
-            _updating = true; Seek.Maximum = _duration; _updating = false; UpdateRange();
-            PlayerPoster.Source = _selected.Thumbnail; PlayerPoster.Visibility = Visibility.Visible;
-            Check("library loads actual clip metadata", ClipList.Items.Count > 0);
-            VolumeSlider.Value = .35; Check("volume slider updates media volume", Math.Abs(Player.Volume - .35) < .001);
+            ClipList.SelectedIndex = 0; PrepareVerificationPreview();
+            Check("selecting a real clip opens the editor", _selected != null && EditorPanel.Visibility == Visibility.Visible && LibraryPanel.Visibility == Visibility.Collapsed);
+            VolumeSlider.Value = .35; Check("volume controls media volume", Math.Abs(Player.Volume - .35) < .001);
             MuteClick(this, new()); Check("mute toggles playback", Player.IsMuted);
             MuteClick(this, new()); Check("unmute toggles playback", !Player.IsMuted);
-            SetFullscreen(true); Check("fullscreen expands player and removes navigation", _fullscreen && Sidebar.Visibility == Visibility.Collapsed && Grid.GetColumnSpan(LibraryPanel) == 2);
-            SetFullscreen(false); Check("fullscreen exits to editor", !_fullscreen && Sidebar.Visibility == Visibility.Visible);
-            var marker = _selected.Session.Moments.FirstOrDefault(m => m.RecordingTime - _selected.Clip.RecordingOrigin >= Timeline.SelectionStart && m.RecordingTime - _selected.Clip.RecordingOrigin <= Timeline.SelectionEnd);
+            SetFullscreen(true); Check("fullscreen expands only the player workspace", _fullscreen && Sidebar.Visibility == Visibility.Collapsed && Grid.GetColumnSpan(EditorPanel) == 2 && InspectorColumn.Width.Value == 0);
+            SetFullscreen(false); Check("fullscreen restores inspector and timeline", !_fullscreen && Inspector.Visibility == Visibility.Visible && TrimWorkbench.Visibility == Visibility.Visible);
+            var marker = _selected!.Session.Moments.FirstOrDefault(m => m.RecordingTime - _selected.Clip.RecordingOrigin >= Timeline.SelectionStart && m.RecordingTime - _selected.Clip.RecordingOrigin <= Timeline.SelectionEnd);
             if (marker != null)
             {
                 PreviewMoment(marker.RecordingTime);
-                Check("event preview seeks before the event", Math.Abs(Timeline.Position - PlaybackNavigation.BeforeEvent(marker.RecordingTime, _selected.Clip.RecordingOrigin, Timeline.SelectionStart, Timeline.SelectionEnd)) < .01);
+                Check("events preview three seconds before action", Math.Abs(Timeline.Position - PlaybackNavigation.BeforeEvent(marker.RecordingTime, _selected.Clip.RecordingOrigin, Timeline.SelectionStart, Timeline.SelectionEnd)) < .01);
                 SetPlaying(false);
             }
-            DeleteClick(this, new()); Check("delete presents protected confirmation", _deleteCandidate != null && DeleteOverlay.Visibility == Visibility.Visible);
-            CancelDeleteClick(this, new()); Check("cancel deletion keeps the clip", _deleteCandidate == null && File.Exists(_selected.Clip.Path));
+            DeleteClick(this, new()); Check("deletion is protected by confirmation", _deleteCandidate != null && DeleteOverlay.Visibility == Visibility.Visible);
+            CancelDeleteClick(this, new()); Check("cancelling deletion keeps media", _deleteCandidate == null && File.Exists(_selected.Clip.Path));
             PlayerPoster.Visibility = Visibility.Visible;
             await LoadFilmstrip(_selected.Clip.Path, _duration, _selectionVersion);
+            BackToLibraryClick(this, new()); Check("back returns to gallery", LibraryPanel.Visibility == Visibility.Visible && EditorPanel.Visibility == Visibility.Collapsed);
         }
         foreach (var size in render ? new[] { new Size(1480, 920), new Size(1100, 720) } : [])
         {
-            LibraryClick(this, new());
-            await RenderPreview(Path.Combine(output, $"library-{size.Width}.png"), size);
-            Check($"editor fits {size.Width}px", Editor.ActualWidth >= 500 && TrimWorkbench.ActualWidth >= 500 && VideoSurface.ActualHeight >= 140);
+            LibraryClick(this, new()); await RenderPreview(Path.Combine(output, $"gallery-{size.Width}.png"), size);
+            Check($"gallery fits {size.Width}px", ClipList.ActualWidth > 800);
+            if (ClipList.Items.Count > 0)
+            {
+                ClipList.SelectedIndex = 0; PrepareVerificationPreview();
+                await LoadFilmstrip(_selected!.Clip.Path, _duration, _selectionVersion);
+                await RenderPreview(Path.Combine(output, $"editor-{size.Width}.png"), size);
+                var track = (System.Windows.Controls.Primitives.Track)VolumeSlider.Template.FindName("PART_Track", VolumeSlider);
+                File.WriteAllText(Path.Combine(output, "slider-layout.txt"), $"Value={track.Value} min={track.Minimum} max={track.Maximum} track={track.ActualWidth}x{track.ActualHeight} decrease={track.DecreaseRepeatButton.ActualWidth}x{track.DecreaseRepeatButton.ActualHeight} increase={track.IncreaseRepeatButton.ActualWidth}x{track.IncreaseRepeatButton.ActualHeight}");
+                Check($"volume track is visible at {size.Width}px", track.DecreaseRepeatButton.ActualWidth > 2 && track.IncreaseRepeatButton.ActualWidth > 2);
+                Check($"editor fits {size.Width}px", VideoSurface.ActualWidth >= 600 && VideoSurface.ActualHeight >= 200 && TrimWorkbench.ActualWidth >= 900);
+            }
             SettingsClick(this, new());
-            await RenderPreview(Path.Combine(output, $"settings-{size.Width}.png"), size);
-            Check($"settings controls fit {size.Width}px", ModeBox.ActualWidth > 200 && CaptureMethodBox.ActualWidth > 200);
+            foreach (var category in new[] { "Recording", "Audio", "Highlights", "Storage" })
+            {
+                ShowSettingsCategory(category);
+                await RenderPreview(Path.Combine(output, $"settings-{category.ToLowerInvariant()}-{size.Width}.png"), size);
+                Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
+            }
         }
+        var testPaths = new HostPaths(Path.Combine(output, "settings-profile")); var probe = new MainWindow(testPaths, false);
+        try
+        {
+            probe.BeforeInput.Text = "invalid"; probe.SaveSettingsClick(this, new());
+            Check("invalid settings stay visible and are not written", !File.Exists(testPaths.Settings) && probe.SettingsError.Text.Length > 0);
+            probe.BeforeInput.Text = "18"; probe.OutputInput.Text = Path.Combine(testPaths.Root, "recordings"); probe.MicBox.IsChecked = false; probe.SaveSettingsClick(this, new());
+            Check("valid settings persist to the selected profile", JsonStore.Read<EchoSettings>(testPaths.Settings)?.BeforeSeconds == 18 && probe.SettingsError.Text.Length == 0);
+            for (int i = 0; i < 65; i++) probe._items.Add(new(new Session { Champion = i == 0 ? "Unique champion" : "Fixture", StartedAt = DateTimeOffset.UtcNow.AddSeconds(-i) }, new(i.ToString(), "", 0, 10, "Kill", false), null));
+            probe.ApplyFilter(); Check("gallery page is bounded to 32 items", probe.ClipList.Items.Count == 32);
+            probe.NextPageClick(this, new()); probe.NextPageClick(this, new()); Check("gallery pagination reaches the final item", probe.ClipList.Items.Count == 1);
+            probe.SearchBox.Text = "Unique champion"; Check("search resets pagination and filters results", probe.ClipList.Items.Count == 1 && probe._galleryPage == 0);
+        }
+        finally { probe.Close(); }
         File.WriteAllLines(Path.Combine(output, "checks.txt"), checks);
+    }
+    private void PrepareVerificationPreview()
+    {
+        if (_selected == null) return;
+        _duration = Math.Max(.1, _selected.Clip.End); Timeline.Duration = _duration; Timeline.SelectionStart = _selected.Clip.Start; Timeline.SelectionEnd = _selected.Clip.End;
+        Timeline.Moments = _selected.Session.Moments.Select(m => (m.RecordingTime - _selected.Clip.RecordingOrigin, m.Kind)).ToArray();
+        _updating = true; Seek.Maximum = _duration; _updating = false; UpdateRange();
+        PlayerPoster.Source = _selected.Thumbnail; PlayerPoster.Visibility = Visibility.Visible; RefreshStatus();
     }
     private static async Task<List<string>> VerifyStartupCommands(string profile, bool fault)
     {

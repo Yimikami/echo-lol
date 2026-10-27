@@ -43,9 +43,9 @@ internal static class MediaTools
         File.Move(temp, output); // Never overwrite a user file.
         return output;
     }
-    public static void Thumbnail(string source, string target, double at)
+    public static void Thumbnail(string source, string target, double at, int width = 480)
     {
         if (File.Exists(target)) return;
-        Run("ffmpeg", ["-hide_banner", "-v", "error", "-n", "-threads", "1", "-ss", at.ToString("0.###", CultureInfo.InvariantCulture), "-i", source, "-frames:v", "1", "-filter_threads", "1", "-threads", "1", "-vf", "scale=480:-2", target]);
+        Run("ffmpeg", ["-hide_banner", "-v", "error", "-n", "-threads", "1", "-ss", at.ToString("0.###", CultureInfo.InvariantCulture), "-i", source, "-frames:v", "1", "-filter_threads", "1", "-threads", "1", "-vf", $"scale={width}:-2", target]);
     }
 }

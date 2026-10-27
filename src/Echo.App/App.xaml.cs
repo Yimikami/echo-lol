@@ -9,6 +9,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         Wpf.Ui.Appearance.ApplicationThemeManager.Apply(Wpf.Ui.Appearance.ApplicationTheme.Dark);
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(System.Windows.Media.Color.FromRgb(194, 212, 255), Wpf.Ui.Appearance.ApplicationTheme.Dark, false);
         var index = Array.IndexOf(e.Args, "--data-dir");
         var paths = new HostPaths(index >= 0 && index + 1 < e.Args.Length ? e.Args[index + 1] : null);
         if (e.Args.Contains("--verify-ui") || e.Args.Contains("--verify-behavior"))

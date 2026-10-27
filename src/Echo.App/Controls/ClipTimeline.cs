@@ -19,12 +19,14 @@ public sealed class ClipTimeline : FrameworkElement
     public event Action<double, double>? RangeChanged;
     public event Action<double>? MomentRequested;
     private int _drag;
-    private const double Inset = 12, Top = 26, StripHeight = 46;
+    private const double Inset = 12, Top = 31;
+    private double StripHeight => Math.Max(44, Math.Min(76, ActualHeight - 78));
+    private double MarkerY => Top + StripHeight + 23;
     private double Span => Math.Max(1, ActualWidth - Inset * 2);
     private double X(double time) => Inset + (Duration > 0 ? Math.Clamp(time / Duration, 0, 1) : 0) * Span;
     private double At(double x) => Math.Clamp((x - Inset) / Span * Duration, 0, Duration);
     private static SolidColorBrush Brush(string hex) { var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); b.Freeze(); return b; }
-    private static readonly Brush Accent = Brush("#9DE1C7"), Secondary = Brush("#AFBCB8"), Surface = Brush("#111719"), Dim = Brush("#B0101518");
+    private static readonly Brush Accent = Brush("#C2D4FF"), Secondary = Brush("#A1A7B2"), Surface = Brush("#111318"), Dim = Brush("#B00C0D11");
 
     public ClipTimeline() { Focusable = true; Cursor = Cursors.Hand; MinHeight = 106; ToolTip = "Drag the edges to trim. Click a moment to preview its lead-in. Arrow keys seek; Shift + arrow seeks 0.1s."; }
     protected override void OnRender(DrawingContext dc)
@@ -42,8 +44,18 @@ public sealed class ClipTimeline : FrameworkElement
         if (Frames.Count > 0)
         {
             dc.PushClip(new RectangleGeometry(new Rect(Inset, Top, Span, StripHeight), 5, 5));
-            var width = Span / Frames.Count;
-            for (int i = 0; i < Frames.Count; i++) dc.DrawImage(Frames[i], new Rect(Inset + i * width, Top, width + 1, StripHeight));
+            var cellWidth = Math.Max(80, StripHeight * 16 / 9);
+            var cells = Math.Max(1, (int)Math.Ceiling(Span / cellWidth));
+            var width = Span / cells;
+            for (int i = 0; i < cells; i++)
+            {
+                var frame = Frames[Math.Min(Frames.Count - 1, (int)((i + .5) / cells * Frames.Count))];
+                var rect = new Rect(Inset + i * width, Top, width + 1, StripHeight);
+                var imageWidth = StripHeight * 16 / 9;
+                dc.PushClip(new RectangleGeometry(rect));
+                dc.DrawImage(frame, new Rect(rect.X + (rect.Width - imageWidth) / 2, Top, imageWidth, StripHeight));
+                dc.Pop();
+            }
             dc.Pop();
         }
         var left = X(SelectionStart); var right = X(SelectionEnd);
@@ -55,21 +67,23 @@ public sealed class ClipTimeline : FrameworkElement
             dc.DrawRoundedRectangle(Accent, null, new Rect(x - 5, Top - 1, 10, StripHeight + 2), 3, 3);
             dc.DrawLine(new Pen(Surface, 1.5), new Point(x, Top + 17), new Point(x, Top + 29));
         }
+        double lastLabelX = -100;
         foreach (var moment in Moments.Where(m => m.Time >= 0 && m.Time <= Duration))
         {
             var color = moment.Kind == MomentKind.Death ? Brush("#FFA891") : moment.Kind == MomentKind.Assist ? Brush("#A3C8ED") : Accent;
-            dc.DrawEllipse(color, null, new Point(X(moment.Time), 88), 4, 4);
+            dc.DrawRoundedRectangle(color, null, new Rect(X(moment.Time) - 2, MarkerY - 6, 4, 12), 2, 2);
+            if (X(moment.Time) > lastLabelX + 84) { Text(dc, moment.Kind.ToString(), new Point(X(moment.Time) + 7, MarkerY - 8), color); lastLabelX = X(moment.Time); }
         }
         var play = X(Position);
         dc.DrawLine(new Pen(Brushes.White, 1.5), new Point(play, Top - 4), new Point(play, Top + StripHeight + 5));
         if (IsKeyboardFocused) dc.DrawRoundedRectangle(null, new Pen(Accent, 1), new Rect(1, 1, Math.Max(0, ActualWidth - 2), Math.Max(0, ActualHeight - 2)), 4, 4);
     }
-    private void Text(DrawingContext dc, string value, Point point, Brush brush) => dc.DrawText(new FormattedText(value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 11, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip), point);
+    private void Text(DrawingContext dc, string value, Point point, Brush brush) => dc.DrawText(new FormattedText(value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface((FontFamily)FindResource("StudioFont"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal), 11, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip), point);
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e); if (Duration <= 0) return;
         Focus(); var p = e.GetPosition(this);
-        if (p.Y > 77)
+        if (p.Y > Top + StripHeight + 7)
         {
             var candidates = Moments.Where(m => m.Time >= 0 && m.Time <= Duration).OrderBy(m => Math.Abs(X(m.Time) - p.X)).ToArray();
             if (candidates.Length > 0 && Math.Abs(X(candidates[0].Time) - p.X) < 14) { MomentRequested?.Invoke(candidates[0].Time); e.Handled = true; return; }

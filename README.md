@@ -13,16 +13,18 @@ Automatically preserve your kills, assists and deaths, or record a full match an
 - **Clips only:** one hardware encoder, a bounded encoded replay buffer, and event-driven saves with configurable lead-in and tail.
 - **Full match:** record once, retain event ranges, and export only the moments you choose.
 - **Your game's audio:** application audio by default; no automatic fallback to desktop sound. Enabling desktop sound captures the full mix without doubling the game source.
-- **Local library:** English Fluent WPF interface, search, event filters, fullscreen playback, volume/mute, a filmstrip trim timeline, safe deletion and MP4 export.
+- **Local library:** English native WPF studio, a paged clip gallery, search/event filters, dedicated editor, fullscreen playback, volume/mute, a filmstrip timeline, safe deletion and MP4 export.
 - **Independent recorder:** closing the library leaves recording running. A small supervisor keeps detection available; each native capture worker handles one recording lifecycle. Tray controls pause capture, resume it, save a manual moment or exit the recorder. After a native fault, capture pauses with an error rather than repeatedly restarting against the same game.
 - **Hardware first:** NVENC, AMD AMF or Intel QSV H.264. Recording does not silently fall back to CPU encoding.
 - **Local files:** no account, uploads, cloud storage, in-game overlay or pixel analysis.
 
-## Interface direction
+## Studio interface
 
-<img src="docs/design/concept-c.png" alt="User-selected illustrative Echo design concept: clip list, large player and trim workbench" />
+Browse a local gallery of your plays, then open one in a focused editor: large video preview, full-width timeline and a trim/export inspector. Recording, Audio, Highlights and Storage each have their own settings page.
 
-This is the selected **design mockup**, not a screenshot of verified gameplay or a finished application. Its game imagery and example clips are illustrative. The implemented library uses actual recordings and an empty state when none exist.
+<img src="assets/screenshots/recording-settings.png" alt="Echo native recording settings with category navigation, aligned controls and a persistent save bar" />
+
+Native WPF settings view rendered at 1480×920. Manrope typography and regular-weight Phosphor icons are bundled with their upstream licenses. See [design decisions and references](DESIGN.md).
 
 ## Requirements
 
@@ -56,7 +58,7 @@ Echo never silently switches from window capture to display capture. No game pro
 
 ## Playback and trimming
 
-Select a moment, then drag its timeline edges or enter `minutes:seconds` to choose a range. I/O sets the in/out point at the playhead; Reset restores the original range. Event markers preview the action with a three-second lead-in, limited to the available recording and trim range. Space toggles playback, F toggles fullscreen, Esc exits fullscreen, and M toggles mute. The volume slider changes playback audio independently of recording sources. Export saves an MP4. Full-match moments reference the original recording until export. Exports are serial in the UI, are disabled during recording, and stop if a recording starts. Export creates a new file and preserves the original.
+Open a moment from the gallery, then drag its timeline edges or enter `minutes:seconds` to choose a range. I/O sets the in/out point at the playhead; Reset restores the original range. Event markers preview the action with a three-second lead-in, limited to the available recording and trim range. Space toggles playback, F or a video double-click toggles fullscreen, Esc exits fullscreen or returns to the gallery, and M toggles mute. The volume slider changes playback audio independently of recording sources. Export saves an MP4. Full-match moments reference the original recording until export. Exports are serial in the UI, are disabled during recording, and stop if a recording starts. Export creates a new file and preserves the original.
 
 The Delete action moves standalone video files to the Windows Recycle Bin. Removing a highlight that references a full match only removes that highlight; the shared match stays. Deleting a full match removes its dependent highlight entries.
 
@@ -95,6 +97,6 @@ Priorities: live League acceptance, fullscreen/focus transitions, longer stabili
 
 ## License and credits
 
-GPL-3.0-or-later. Uses OBS Studio/libobs, FFmpeg and WPF UI (including Fluent System Icons); see [third-party notices](THIRD_PARTY_NOTICES.md). Design research included Segra, RePlays and Rewa. Echo uses original application code and original bindings to the documented libobs C API.
+GPL-3.0-or-later. Uses OBS Studio/libobs, FFmpeg and WPF UI, Phosphor Icons and Manrope; see [third-party notices](THIRD_PARTY_NOTICES.md). Design research included Segra, RePlays and Rewa. Echo uses original application code and original bindings to the documented libobs C API.
 
 Echo isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
