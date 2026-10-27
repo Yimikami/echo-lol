@@ -97,6 +97,7 @@ public sealed record RecorderStatus
     public int Frames { get; init; }
     public int DroppedFrames { get; init; }
     public bool? GameAudioHooked { get; init; }
+    public bool? GameForeground { get; init; }
     public double CpuPercent { get; init; }
     public double WorkingSetMegabytes { get; init; }
     public double PrivateMegabytes { get; init; }

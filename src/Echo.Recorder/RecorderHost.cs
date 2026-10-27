@@ -6,14 +6,14 @@ using Echo.Core;
 
 namespace Echo.Recorder;
 
-internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellation)
+internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellation, bool initiallyArmed = true)
 {
     private readonly ConcurrentQueue<string> _commands = new();
     private readonly Process _process = Process.GetCurrentProcess();
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
     private double _lastWall, _lastCpu, _cpu;
-    private bool _armed = true;
-    private RecorderStatus _status = new();
+    private bool _armed = initiallyArmed;
+    private RecorderStatus _status = (JsonStore.Read<RecorderStatus>(paths.Status) ?? new()) with { Recording = false };
     public void Enqueue(string command) => _commands.Enqueue(command);
 
     public async Task ServeAsync()
@@ -34,7 +34,13 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             }
             catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { }
             catch (IOException) { }
+            catch (UnauthorizedAccessException) { await Task.Delay(250, cancellation); }
             catch (OperationCanceledException) { break; }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("Control connection failed: " + e.Message);
+                if (!cancellation.IsCancellationRequested) await Task.Delay(250, cancellation);
+            }
         }
     }
     public void Watch()
@@ -46,31 +52,42 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             while (_commands.TryDequeue(out var c))
             {
                 if (c == "disarm") _armed = false;
-                if (c is "arm" or "retry") { _armed = true; failedProcess = -1; }
+                if (c is "arm" or "retry") { _armed = true; failedProcess = -1; _status = _status with { Error = null }; }
             }
-            var target = _armed ? Windows.Find() : null;
+            var observedWindow = Windows.Find();
+            var target = _armed ? observedWindow : null;
             if (target == null) failedProcess = -1;
             if (target == null || Windows.IsIconic(target.Handle) || target.ProcessId == failedProcess)
             {
-                Publish(_status with { Armed = _armed, Recording = false, State = !_armed ? "Capture paused" : failedProcess >= 0 ? "Recording needs attention" : "Waiting for League" });
+                Publish(_status with { Armed = _armed, Recording = false, GameForeground = observedWindow != null && Windows.IsForeground(observedWindow.ProcessId), State = !_armed ? "Capture paused" : failedProcess >= 0 ? "Recording needs attention" : "Waiting for League" });
                 cancellation.WaitHandle.WaitOne(1500); continue;
             }
             try
             {
                 var settings = paths.LoadSettings();
+                if (settings.CaptureMethod == CaptureMethod.FullscreenDisplay && !Windows.IsForeground(target.ProcessId))
+                {
+                    Publish(_status with { Armed = _armed, Recording = false, GameForeground = false, Error = null, State = "Waiting for League focus" });
+                    cancellation.WaitHandle.WaitOne(500); continue;
+                }
                 using var initial = league.GetAsync("allgamedata", cancellation).GetAwaiter().GetResult();
                 if (!initial.RootElement.TryGetProperty("gameData", out _)) { cancellation.WaitHandle.WaitOne(1000); continue; }
                 Record(settings, target, league, initial.RootElement);
+                break; // A new native process handles the next match or a resumed session.
             }
-            catch (Exception e) when (e is not OperationCanceledException)
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { break; }
+            catch (Exception e)
             {
-                if (e is HttpRequestException or TaskCanceledException) { cancellation.WaitHandle.WaitOne(1500); continue; }
+                if (e is HttpRequestException or OperationCanceledException) { cancellation.WaitHandle.WaitOne(1500); continue; }
                 failedProcess = target.ProcessId;
                 Publish(_status with { Armed = _armed, Recording = false, State = "Recording needs attention", Error = e.Message });
                 Console.Error.WriteLine(e);
+                _armed = false;
+                break;
             }
         }
-        Publish(_status with { Armed = false, Recording = false, State = "Recorder stopped" });
+        JsonStore.Write(paths.Handoff, new { Armed = _armed, Error = _status.Error });
+        Publish(_status with { Armed = _armed, Recording = false, State = _armed ? "Waiting for League" : "Capture paused" });
     }
 
     private void Record(EchoSettings settings, CaptureWindow target, LeagueClient league, JsonElement initial)
@@ -80,6 +97,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         Directory.CreateDirectory(folder);
         var metadata = Path.Combine(folder, "session.json");
         JsonStore.Write(metadata, session);
+        Publish(_status with { Armed = _armed, Recording = false, State = "Starting recording", SessionId = session.Id, ElapsedSeconds = 0, Frames = 0, Error = null });
         var timeline = new MomentPlanner(settings); var pending = new ReplayScheduler(settings); var detector = new EventDetector();
         detector.Identify(initial);
         var initialTime = initial.GetProperty("gameData").GetProperty("gameTime").GetDouble();
@@ -148,7 +166,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                     var hooked = engine.AudioHooked();
                     Publish(new() { Armed = _armed, Recording = true, State = settings.CaptureMethod == CaptureMethod.FullscreenDisplay && !Windows.IsForeground(target.ProcessId) ? "Game unfocused — video masked" : Windows.IsIconic(target.Handle) ? "Game minimized — video may pause" : !engine.HasVideo ? "Waiting for game video" : "Recording", Encoder = engine.Encoder,
                         NativeVersion = engine.Version, ElapsedSeconds = now, Frames = engine.Frames, DroppedFrames = engine.DroppedFrames,
-                        SessionId = session.Id, GameAudioHooked = hooked,
+                        SessionId = session.Id, GameAudioHooked = hooked, GameForeground = Windows.IsForeground(target.ProcessId),
                         Error = settings.GameAudio && now > 10 && hooked == false ? "Game audio has not attached. Desktop audio remains off unless enabled." : null });
                     session.Duration = now; JsonStore.Write(metadata, session); nextStatus = now + 1;
                 }

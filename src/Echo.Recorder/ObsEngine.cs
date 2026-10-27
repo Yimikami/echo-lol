@@ -119,7 +119,9 @@ internal sealed class ObsEngine : IDisposable
             Native.obs_sceneitem_set_visible(item, false);
             _focusGuard = (_, _, _) =>
             {
-                var visible = Windows.IsForeground(processId) && Windows.FillsMonitor(target.Handle, monitorHandle);
+                // Exclusive fullscreen can retain a small Win32 window rectangle while its
+                // swap chain owns the monitor. Do not infer capture readiness from that rect.
+                var visible = Windows.IsForeground(processId) && !Windows.IsIconic(target.Handle) && Windows.MonitorHandle(target.Handle) == monitorHandle;
                 if (visible != lastVisible) { Native.obs_sceneitem_set_visible(item, visible); lastVisible = visible; }
             };
             Native.obs_add_main_render_callback(_focusGuard, 0);

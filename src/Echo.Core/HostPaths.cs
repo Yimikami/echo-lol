@@ -8,6 +8,8 @@ public sealed class HostPaths
     public string Root { get; }
     public string Settings => Path.Combine(Root, "settings.json");
     public string Status => Path.Combine(Root, "status.json");
+    public string Handoff => Path.Combine(Root, "worker-handoff.json");
+    public string StopRequest => Path.Combine(Root, "stop-recorder.request");
     public string PipeName => "Echo-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Root.ToUpperInvariant())))[..16];
     public HostPaths(string? root = null)
     {

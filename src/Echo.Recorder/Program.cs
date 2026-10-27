@@ -16,6 +16,7 @@ internal static class Program
         {
             Console.WriteLine("Echo.Recorder [--data-dir PATH] [--diagnose | --record --seconds 20 [--synthetic | --window TITLE] [--mode clips|full]]\nNo arguments: watch for League, with tray controls. Never captures the desktop implicitly."); return 0;
         }
+        if (!args.Contains("--worker") && !args.Contains("--record") && !args.Contains("--diagnose")) return Supervisor.Run(paths);
         using var mutex = new Mutex(true, "Local\\" + paths.PipeName, out var first);
         if (!first) { Console.Error.WriteLine("Echo's recorder is already running for this profile."); return 2; }
         try
@@ -31,19 +32,23 @@ internal static class Program
             using var log = new BoundedLog(Path.Combine(paths.Root, "recorder.log"));
             Console.SetOut(log); Console.SetError(log);
             using var cancellation = new CancellationTokenSource();
-            var host = new RecorderHost(paths, cancellation.Token);
+            var host = new RecorderHost(paths, cancellation.Token, !args.Contains("--paused"));
             var pipe = host.ServeAsync();
             var worker = new Thread(host.Watch) { IsBackground = true, Name = "Echo recorder" }; worker.SetApartmentState(ApartmentState.MTA); worker.Start();
             ApplicationConfiguration.Initialize();
-            using var tray = new NotifyIcon { Text = "Echo — waiting for League", Icon = System.Drawing.SystemIcons.Application, Visible = true };
+            using var appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
+            using var tray = new NotifyIcon { Text = "Echo — automatic League capture", Icon = appIcon ?? System.Drawing.SystemIcons.Application, Visible = true };
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open Echo", null, (_, _) => OpenUi(paths));
             menu.Items.Add("Save moment", null, (_, _) => host.Enqueue("save"));
             menu.Items.Add("Resume capture", null, (_, _) => host.Enqueue("arm"));
             menu.Items.Add("Pause capture", null, (_, _) => host.Enqueue("disarm"));
-            menu.Items.Add("Exit recorder", null, (_, _) => { cancellation.Cancel(); Application.ExitThread(); });
+            menu.Items.Add("Exit recorder", null, (_, _) => { File.WriteAllText(paths.StopRequest, "stop"); cancellation.Cancel(); Application.ExitThread(); });
             tray.ContextMenuStrip = menu; tray.DoubleClick += (_, _) => OpenUi(paths);
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); Application.Exit(); };
+            using var workerMonitor = new System.Windows.Forms.Timer { Interval = 500 };
+            workerMonitor.Tick += (_, _) => { if (!worker.IsAlive) Application.ExitThread(); };
+            workerMonitor.Start();
             Application.Run();
             cancellation.Cancel(); worker.Join(TimeSpan.FromSeconds(30));
             tray.Visible = false;
