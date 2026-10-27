@@ -95,6 +95,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             clock.Start();
             if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
             double nextPoll = 0, nextStatus = 0, nextDisk = 0, gameTime = initialTime;
+            double? noVideoSince = null;
             int disconnected = 0, manualId = -1;
             while (!cancellation.IsCancellationRequested && _armed)
             {
@@ -106,8 +107,14 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 }
                 if (!_armed) break;
                 if (!engine.Active) throw new InvalidOperationException($"Recording stopped unexpectedly: {engine.LastError}");
-                if (now > 8 && !Windows.IsIconic(target.Handle) && (settings.CaptureMethod == CaptureMethod.Window || Windows.IsForeground(target.ProcessId)) && !engine.HasVideo)
-                    throw new InvalidOperationException("No video frames arrived from the game window. Use borderless mode and check Windows capture permissions; desktop capture was not substituted.");
+                var requiresVideo = !Windows.IsIconic(target.Handle) && (settings.CaptureMethod == CaptureMethod.Window || Windows.IsForeground(target.ProcessId));
+                if (requiresVideo && !engine.HasVideo)
+                {
+                    noVideoSince ??= now;
+                    if (now - noVideoSince > 8)
+                        throw new InvalidOperationException("No video frames arrived for eight seconds while the game was foreground. Check the selected capture method, fullscreen monitor and Windows capture permissions.");
+                }
+                else noVideoSince = null;
                 if (now >= nextPoll)
                 {
                     nextPoll = now + .5;
@@ -139,7 +146,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 if (now >= nextStatus)
                 {
                     var hooked = engine.AudioHooked();
-                    Publish(new() { Armed = _armed, Recording = true, State = Windows.IsIconic(target.Handle) ? "Game minimized — video may pause" : "Recording", Encoder = engine.Encoder,
+                    Publish(new() { Armed = _armed, Recording = true, State = settings.CaptureMethod == CaptureMethod.FullscreenDisplay && !Windows.IsForeground(target.ProcessId) ? "Game unfocused — video masked" : Windows.IsIconic(target.Handle) ? "Game minimized — video may pause" : !engine.HasVideo ? "Waiting for game video" : "Recording", Encoder = engine.Encoder,
                         NativeVersion = engine.Version, ElapsedSeconds = now, Frames = engine.Frames, DroppedFrames = engine.DroppedFrames,
                         SessionId = session.Id, GameAudioHooked = hooked,
                         Error = settings.GameAudio && now > 10 && hooked == false ? "Game audio has not attached. Desktop audio remains off unless enabled." : null });
