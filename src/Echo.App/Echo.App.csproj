@@ -11,6 +11,9 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <ProjectReference Include="../Echo.Core/Echo.Core.csproj" />
     <Resource Include="../../assets/brand/echo-emblem.png" Link="Assets/echo-emblem.png" />
+    <Resource Include="Assets/Fonts/Manrope-Regular.ttf" />
+    <Resource Include="Assets/Fonts/Manrope-SemiBold.ttf" />
+    <Resource Include="Assets/Fonts/Manrope-Bold.ttf" />
     <Compile Include="../Echo.Recorder/MediaTools.cs" Link="Services/MediaTools.cs" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,16 @@
+{
+  "icons": {
+    "library": "Phosphor Core regular",
+    "source": "https://github.com/phosphor-icons/core",
+    "commit": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+    "conversion": "Unmodified SVG path data to WPF PathGeometry",
+    "license": "assets/licenses/Phosphor-LICENSE.txt"
+  },
+  "font": {
+    "family": "Manrope",
+    "source": "https://github.com/google/fonts/tree/main/ofl/manrope",
+    "original_sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+    "conversion": "fontTools.varLib.instancer at wght=400,600,700, updateFontNames=True",
+    "license": "assets/licenses/Manrope-OFL.txt"
+  }
+}
