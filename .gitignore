@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+runtime/
+recordings/
+artifacts/
+*.user
+*.log
+config.local.json
+.impeccable/mocks/
+.impeccable/review/
