@@ -19,9 +19,10 @@ public sealed record InputOverlayPreset
         if (new[] { X, Y, Width }.Any(v => !double.IsFinite(v) || v < 0 || v > 1) || Width < .15 || Width > .85) throw new ArgumentException("Check input overlay size and position.");
     }
 }
+public sealed record InputKey(string Id,string Label,int X,int Y,int Width=32,int Height=30);
 public sealed record OverlayMouse(double X,double Y,double Width,double Height);
 public sealed record OverlayLayout(int Width,int Height,IReadOnlyList<InputKey> Keys,OverlayMouse? Mouse);
-public sealed record OverlayColors(string Panel,string Key,string Pressed,string Text,string Line,string PanelAlpha);
+public sealed record OverlayColors(string Key,string Pressed,string Text,string Line);
 public static class OverlayAppearance
 {
     public static IReadOnlyList<string[]> KeyboardRows { get; } = [
@@ -39,8 +40,7 @@ public static class OverlayAppearance
     private static readonly OverlayLayout Mouse=MakeMouse();
     public static OverlayLayout Layout(string name)=>name=="Full"?Full:name=="Mouse"?Mouse:Compact;
     public static OverlayLayout Layout(InputOverlayPreset preset)=>preset.Layout=="Custom"?MakeCustom(preset):Layout(preset.Layout);
-    public static IEnumerable<string> AllControls=>Full.Keys.Select(k=>k.Id).Concat(Compact.Keys.Select(k=>k.Id)).Distinct();
-    public static OverlayColors Colors(string style)=>style=="Light"?new("FFFFFF","FFFFFF","151515","151515","151515","FF"):new("000000","000000","FFFFFF","FFFFFF","FFFFFF","FF");
+    public static OverlayColors Colors(string style)=>style=="Light"?new("FFFFFF","151515","151515","151515"):new("000000","FFFFFF","FFFFFF","FFFFFF");
     private static void AddMouse(List<InputKey> keys,OverlayMouse m)
     {
         void Add(string id,double x,double y,double w,double h)=>keys.Add(new(id,"",(int)(m.X+x*m.Width),(int)(m.Y+y*m.Height),Math.Max(2,(int)(w*m.Width)),Math.Max(2,(int)(h*m.Height))));

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Text;
 using Echo.Core;

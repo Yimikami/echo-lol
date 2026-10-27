@@ -8,7 +8,5 @@ artifacts/
 *.user
 *.log
 config.local.json
-.impeccable/mocks/
-.impeccable/review/
-.impeccable/build/
+.impeccable/
 win-capture/

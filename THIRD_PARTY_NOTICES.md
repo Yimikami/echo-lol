@@ -1,6 +1,6 @@
 # Third-party notices
 
-Echo's original source is GPL-3.0-or-later. The emblem and design mockups were generated for Echo with OpenAI Imagegen; generation prompts are retained in `assets/brand/provenance.json` and `docs/design/`.
+Echo's original source is GPL-3.0-or-later. The emblem was generated for Echo with OpenAI Imagegen; its generation prompt is retained in `assets/brand/provenance.json`.
 
 OBS Studio / libobs is copyright its contributors and licensed GPL-2.0-or-later. Echo uses the public C API through original declarations. No ObsKit.NET, Segra or RePlays source is incorporated. See https://github.com/obsproject/obs-studio and the OBS licenses copied into bundled runtimes.
 

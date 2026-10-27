@@ -13,3 +13,5 @@ Clips-only mode uses one hardware encoder and an encoded replay buffer. Events a
 Use a recoverable MKV container for full sessions. Replay saves and exports are validated before publication. Use atomic JSON sidecars to retain sessions and event ranges independently of the UI. Start with this portable catalog; add SQLite only when catalog scale warrants it.
 
 Native capture tests, event tests, output checks, and process resource measurements are separate from gameplay benchmarks. Live FPS claims require paired runs under the same League workload and settings, including frame-time percentiles and 1% lows.
+
+The WPF library uses bounded pages and lazy thumbnails. Normal playback includes an input-activity chart and event navigation; trimming opens separately. Settings save automatically. Shared frozen vector artwork supplies both keyboard/mouse playback overlays and exports, including custom key selections. Recording-derived placement previews stay in the local profile. First-run setup can be skipped, and themes follow shared resources.
