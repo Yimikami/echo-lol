@@ -6,15 +6,15 @@
 
 Automatically preserve your kills, assists and deaths, or record a full match and return to its moments later. Game audio is on by default. Desktop audio and your microphone are optional.
 
-> **Early development · v0.1.0-dev.** Native recording, replay saves, event fixtures and application-audio isolation have been exercised locally. Live League event acceptance and paired gameplay FPS measurements are still in progress. There is no zero-FPS-impact claim and no public installer yet.
+> **Early development · v0.1.0-dev.** Native recording, replay saves, event fixtures and application-audio isolation have been exercised locally. A live practice session saved 15 clips from 28 kills and one death; live assists and longer stability remain open. Paired FPS measurements were cancelled in favor of normal-use feedback. There is no zero-FPS-impact claim and no public installer yet.
 
 ## What Echo does
 
 - **Clips only:** one hardware encoder, a bounded encoded replay buffer, and event-driven saves with configurable lead-in and tail.
 - **Full match:** record once, retain event ranges, and export only the moments you choose.
 - **Your game's audio:** application audio by default; no automatic fallback to desktop sound. Enabling desktop sound captures the full mix without doubling the game source.
-- **Local library:** English WPF interface, search, event filters, playback, timestamp markers, range editing and MP4 export.
-- **Independent recorder:** closing the library leaves recording running. Tray controls pause capture, resume it, save a manual moment or exit the recorder.
+- **Local library:** English Fluent WPF interface, search, event filters, fullscreen playback, volume/mute, a filmstrip trim timeline, safe deletion and MP4 export.
+- **Independent recorder:** closing the library leaves recording running. A small supervisor keeps detection available; each native capture worker handles one recording lifecycle. Tray controls pause capture, resume it, save a manual moment or exit the recorder. After a native fault, capture pauses with an error rather than repeatedly restarting against the same game.
 - **Hardware first:** NVENC, AMD AMF or Intel QSV H.264. Recording does not silently fall back to CPU encoding.
 - **Local files:** no account, uploads, cloud storage, in-game overlay or pixel analysis.
 
@@ -50,13 +50,17 @@ The recorder chooses `runtime/` beside the app when present, otherwise the confi
 Select a video method explicitly in Settings:
 
 - **Game window:** Windows Graphics Capture. Appropriate for windowed/borderless games and some fullscreen configurations; exclusive fullscreen may fail.
-- **Fullscreen game display:** DirectX desktop duplication of the monitor containing the game. The game must fill that monitor. A foreground check on each OBS composition masks the scene when another application has focus. Visible overlays and notifications can still be included while the game is foreground; this is display capture, not isolated game rendering. Focus transitions and exclusive fullscreen require live acceptance before privacy or compatibility guarantees can be made.
+- **Fullscreen-compatible game monitor:** DirectX desktop duplication of the monitor containing the game. A foreground check on each OBS composition masks the scene when another application has focus. Everything visible on that monitor can be included while League is foreground, including overlays, notifications and desktop around a windowed game; use window capture for an isolated window. Exclusive fullscreen may retain a Win32 rectangle smaller than the monitor, so Echo does not reject it based on rectangle size. Focus transitions require acceptance before privacy or compatibility guarantees can be made.
 
 Echo never silently switches from window capture to display capture. No game process memory is read and no game-capture DLL is injected by the selected capture paths. Fullscreen support is under active testing; changing your game mode is not a prerequisite for contributing a test.
 
 ## Playback and trimming
 
-Select a moment, play it, drag the start/end controls or enter `minutes:seconds`, then export an MP4. Full-match moments reference the original recording until export. Exports are serial in the UI, are disabled during recording, and stop if a recording starts. Export creates a new file and preserves the original.
+Select a moment, then drag its timeline edges or enter `minutes:seconds` to choose a range. I/O sets the in/out point at the playhead; Reset restores the original range. Event markers preview the action with a three-second lead-in, limited to the available recording and trim range. Space toggles playback, F toggles fullscreen, Esc exits fullscreen, and M toggles mute. The volume slider changes playback audio independently of recording sources. Export saves an MP4. Full-match moments reference the original recording until export. Exports are serial in the UI, are disabled during recording, and stop if a recording starts. Export creates a new file and preserves the original.
+
+The Delete action moves standalone video files to the Windows Recycle Bin. Removing a highlight that references a full match only removes that highlight; the shared match stays. Deleting a full match removes its dependent highlight entries.
+
+Opening Echo starts automatic League detection without pressing Record, and resumes a healthy paused recorder. A visible native error requires retry rather than an automatic crash loop.
 
 Recording uses MKV while active so a normal application interruption does not depend on finalizing an MP4 header. After recording stops, Echo validates and remuxes to MP4 for playback without re-encoding. If preparation fails, the original file and session information remain available. A replay save may retain a little extra footage around the selected range; exported ranges are encoded for accurate boundaries.
 
@@ -75,7 +79,7 @@ See [validation](docs/validation.md) for evidence and open acceptance checks, an
 ## Architecture
 
 ```text
-WPF library  ── local, user-only named pipe ── Recorder host
+WPF library  ── local, user-only named pipe ── Supervised recording worker
                                               ├─ Riot local Live Client Data API
                                               ├─ libobs capture + hardware encoder
                                               └─ Video files + atomic session sidecars
@@ -91,6 +95,6 @@ Priorities: live League acceptance, fullscreen/focus transitions, longer stabili
 
 ## License and credits
 
-GPL-3.0-or-later. Uses OBS Studio/libobs and FFmpeg; see [third-party notices](THIRD_PARTY_NOTICES.md). Design research included Segra, RePlays and Rewa. Echo uses original application code and original bindings to the documented libobs C API.
+GPL-3.0-or-later. Uses OBS Studio/libobs, FFmpeg and WPF UI (including Fluent System Icons); see [third-party notices](THIRD_PARTY_NOTICES.md). Design research included Segra, RePlays and Rewa. Echo uses original application code and original bindings to the documented libobs C API.
 
 Echo isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.

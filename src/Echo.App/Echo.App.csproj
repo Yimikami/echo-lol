@@ -8,6 +8,7 @@
     <ApplicationIcon>../../assets/brand/echo.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
     <ProjectReference Include="../Echo.Core/Echo.Core.csproj" />
     <Resource Include="../../assets/brand/echo-emblem.png" Link="Assets/echo-emblem.png" />
     <Compile Include="../Echo.Recorder/MediaTools.cs" Link="Services/MediaTools.cs" />
