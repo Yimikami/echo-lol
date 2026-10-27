@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Echo.Recorder;
 
@@ -13,7 +13,7 @@ internal static class MediaTools
             if (File.Exists(path)) return path;
         return name; // PATH, developer setup
     }
-    internal static string Run(string executable, IEnumerable<string> arguments, int timeoutSeconds = 30)
+    internal static string Run(string executable, IEnumerable<string> arguments, int timeoutSeconds = 30, bool includeStandardError = false)
     {
         var start = new ProcessStartInfo(Find(executable)) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var arg in arguments) start.ArgumentList.Add(arg);
@@ -21,13 +21,16 @@ internal static class MediaTools
         var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(timeoutSeconds * 1000)) { process.Kill(true); throw new TimeoutException($"{executable} timed out."); }
         if (process.ExitCode != 0) throw new InvalidOperationException($"{executable}: {stderr.GetAwaiter().GetResult()[..Math.Min(1000, stderr.Result.Length)]}");
-        return stdout.GetAwaiter().GetResult();
+        return stdout.GetAwaiter().GetResult() + (includeStandardError ? stderr.GetAwaiter().GetResult() : "");
     }
     public static double Duration(string path)
     {
-        var text = Run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "json", path]);
-        using var json = JsonDocument.Parse(text);
-        var duration = double.Parse(json.RootElement.GetProperty("format").GetProperty("duration").GetString()!, CultureInfo.InvariantCulture);
+        // Reuse FFmpeg's demuxer instead of shipping a second ~100 MB executable.
+        // A zero-length null output inspects the container without decoding a match.
+        var text = Run("ffmpeg", ["-hide_banner", "-threads", "1", "-i", path, "-t", "0", "-f", "null", "-"], includeStandardError: true);
+        var match = Regex.Match(text, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.CultureInvariant);
+        if (!match.Success) throw new InvalidDataException("The recording has no readable container duration.");
+        var duration = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) * 3600 + int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) * 60 + double.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
         if (!double.IsFinite(duration) || duration <= 0) throw new InvalidDataException("The saved recording has no valid duration.");
         return duration;
     }

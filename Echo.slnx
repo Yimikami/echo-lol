@@ -1,0 +1,4 @@
+<Solution>
+  <Folder Name="/src/"><Project Path="src/Echo.Core/Echo.Core.csproj" /><Project Path="src/Echo.Recorder/Echo.Recorder.csproj" /><Project Path="src/Echo.App/Echo.App.csproj" /></Folder>
+  <Folder Name="/tests/"><Project Path="tests/Echo.Tests/Echo.Tests.csproj" /></Folder>
+</Solution>

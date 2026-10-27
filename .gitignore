@@ -10,3 +10,5 @@ artifacts/
 config.local.json
 .impeccable/mocks/
 .impeccable/review/
+.impeccable/build/
+win-capture/
