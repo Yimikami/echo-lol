@@ -6,9 +6,10 @@ namespace Echo.Recorder;
 
 internal sealed class ObsEngine : IDisposable
 {
-    private nint _video, _audio, _output, _scene, _gameAudio;
+    private nint _video, _audio, _output, _scene, _gameAudio, _capture;
     private readonly List<nint> _sources = [];
     private bool _started, _com;
+    private Native.RenderCallback? _focusGuard;
     private static bool _resolverInstalled;
     public string Version { get; private set; } = "";
     public string Encoder { get; private set; } = "";
@@ -16,12 +17,17 @@ internal sealed class ObsEngine : IDisposable
     public IReadOnlyList<string> Inputs { get; private set; } = [];
     public int Frames => _output != 0 ? Native.obs_output_get_total_frames(_output) : 0;
     public int DroppedFrames => _output != 0 ? Native.obs_output_get_frames_dropped(_output) : 0;
+    public uint RenderingLagFrames => _started ? Native.obs_get_lagged_frames() : 0;
+    public uint EncodingLagFrames => _started ? Native.video_output_get_skipped_frames(Native.obs_get_video()) : 0;
+    public uint RenderedFrames => _started ? Native.obs_get_total_frames() : 0;
     public bool Active => _output != 0 && Native.obs_output_active(_output);
+    public bool HasVideo => _capture != 0 && Native.obs_source_get_width(_capture) > 0 && Native.obs_source_get_height(_capture) > 0;
     public string? LastError => _output != 0 ? Native.Text(Native.obs_output_get_last_error(_output)) : null;
 
     public void Initialize(EchoSettings settings, string configurationDirectory)
     {
-        var obsRoot = settings.ObsDirectory ?? Environment.GetEnvironmentVariable("ECHO_OBS_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "obs-studio");
+        var bundled = Path.Combine(AppContext.BaseDirectory, "runtime");
+        var obsRoot = settings.ObsDirectory ?? Environment.GetEnvironmentVariable("ECHO_OBS_DIR") ?? (Directory.Exists(bundled) ? bundled : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "obs-studio"));
         var bin = Path.Combine(obsRoot, "bin", "64bit");
         if (!File.Exists(Path.Combine(bin, "obs.dll"))) throw new FileNotFoundException("OBS runtime not found. Run scripts/setup-runtime.ps1, or set obsDirectory in settings.json.");
         Native.SetDllDirectoryW(bin);
@@ -90,11 +96,34 @@ internal sealed class ObsEngine : IDisposable
         else
         {
             if (target == null || Windows.IsIconic(target.Handle)) throw new InvalidOperationException("The game window must be visible and not minimized. Use borderless mode.");
-            sourceId = "window_capture";
-            capture.Set("window", target.Selector).Set("method", 2).Set("priority", 2).Set("cursor", true).Set("client_area", true).Set("capture_audio", false);
+            if (settings.CaptureMethod == CaptureMethod.FullscreenDisplay)
+            {
+                sourceId = "monitor_capture";
+                capture.Set("monitor_id", Windows.MonitorId(target)).Set("method", 1).Set("capture_cursor", true);
+            }
+            else
+            {
+                sourceId = "window_capture";
+                capture.Set("window", target.Selector).Set("method", 2).Set("priority", 2).Set("cursor", true).Set("client_area", true).Set("capture_audio", false);
+            }
         }
-        var source = CreateSource(sourceId, "Echo video", capture);
+        var source = CreateSource(sourceId, "Echo video", capture); _capture = source;
         var item = Native.obs_scene_add(_scene, source);
+        if (!synthetic && target != null && settings.CaptureMethod == CaptureMethod.FullscreenDisplay)
+        {
+            // Evaluated on the OBS rendering thread immediately before composing each frame.
+            // No pixel buffers or per-frame allocations enter managed code.
+            var processId = target.ProcessId;
+            var monitorHandle = Windows.MonitorHandle(target.Handle);
+            bool lastVisible = false;
+            Native.obs_sceneitem_set_visible(item, false);
+            _focusGuard = (_, _, _) =>
+            {
+                var visible = Windows.IsForeground(processId) && Windows.FillsMonitor(target.Handle, monitorHandle);
+                if (visible != lastVisible) { Native.obs_sceneitem_set_visible(item, visible); lastVisible = visible; }
+            };
+            Native.obs_add_main_render_callback(_focusGuard, 0);
+        }
         Native.obs_sceneitem_set_bounds_type(item, 2); // OBS_BOUNDS_SCALE_INNER, retain aspect ratio
         var bounds = new Native.Vector2 { X = settings.Width, Y = settings.Height };
         Native.obs_sceneitem_set_bounds(item, ref bounds);
@@ -188,7 +217,7 @@ internal sealed class ObsEngine : IDisposable
     }
     public void Stop()
     {
-        if (_output == 0) return;
+        if (_output == 0 || !Native.obs_output_active(_output)) return;
         Native.obs_output_stop(_output);
         var wait = Stopwatch.StartNew();
         while (Native.obs_output_active(_output) && wait.Elapsed.TotalSeconds < 10) Thread.Sleep(50);
@@ -196,15 +225,16 @@ internal sealed class ObsEngine : IDisposable
     }
     public void Dispose()
     {
-        if (!_started) { if (_com) Native.CoUninitialize(); return; }
+        if (!_started) { if (_com) { Native.CoUninitialize(); _com = false; } return; }
         Stop();
+        if (_focusGuard != null) { Native.obs_remove_main_render_callback(_focusGuard, 0); _focusGuard = null; }
         if (_output != 0) Native.obs_output_release(_output);
         for (uint i = 0; i < 6; i++) Native.obs_set_output_source(i, 0);
         if (_scene != 0) Native.obs_scene_release(_scene);
         foreach (var source in _sources) Native.obs_source_release(source);
         if (_video != 0) Native.obs_encoder_release(_video);
         if (_audio != 0) Native.obs_encoder_release(_audio);
-        Native.obs_shutdown(); _started = false;
-        if (_com) Native.CoUninitialize();
+        Native.obs_shutdown(); _started = false; _output = 0;
+        if (_com) { Native.CoUninitialize(); _com = false; }
     }
 }

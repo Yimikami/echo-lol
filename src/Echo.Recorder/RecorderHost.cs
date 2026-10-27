@@ -30,7 +30,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 var command = await reader.ReadLineAsync(timeout.Token);
                 if (command is "arm" or "disarm" or "save" or "retry") _commands.Enqueue(command);
                 using var writer = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
-                await writer.WriteLineAsync(JsonSerializer.Serialize(_status, JsonStore.Options).AsMemory(), timeout.Token);
+                await writer.WriteLineAsync(JsonSerializer.Serialize(_status).AsMemory(), timeout.Token);
             }
             catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { }
             catch (IOException) { }
@@ -91,6 +91,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             CheckDisk(settings);
             engine.Initialize(settings, Path.Combine(paths.Root, "native"));
             engine.Start(settings, target, folder);
+            session.Encoder = engine.Encoder;
             clock.Start();
             if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
             double nextPoll = 0, nextStatus = 0, nextDisk = 0, gameTime = initialTime;
@@ -105,16 +106,18 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 }
                 if (!_armed) break;
                 if (!engine.Active) throw new InvalidOperationException($"Recording stopped unexpectedly: {engine.LastError}");
+                if (now > 8 && !Windows.IsIconic(target.Handle) && (settings.CaptureMethod == CaptureMethod.Window || Windows.IsForeground(target.ProcessId)) && !engine.HasVideo)
+                    throw new InvalidOperationException("No video frames arrived from the game window. Use borderless mode and check Windows capture permissions; desktop capture was not substituted.");
                 if (now >= nextPoll)
                 {
                     nextPoll = now + .5;
                     try
                     {
                         using var stats = league.GetAsync("gamestats", cancellation).GetAwaiter().GetResult();
+                        var sampleCapture = clock.Elapsed.TotalSeconds;
                         using var events = league.GetAsync("eventdata", cancellation).GetAwaiter().GetResult();
                         gameTime = stats.RootElement.GetProperty("gameTime").GetDouble();
                         // The response is mapped to the clock sample taken with gamestats, not after event retrieval.
-                        var sampleCapture = clock.Elapsed.TotalSeconds;
                         foreach (var moment in detector.Consume(events.RootElement, gameTime, sampleCapture)) Add(moment);
                         disconnected = 0;
                     }
@@ -156,13 +159,14 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         finally
         {
             engine.Stop();
+            engine.Dispose(); // Release capture and GPU rendering before remux/thumbnail work.
             session.Duration = clock.Elapsed.TotalSeconds; session.EndedAt = DateTimeOffset.UtcNow;
             Publish(_status with { Recording = false, State = "Finalizing recording" });
             try
             {
                 if (session.RecordingPath is { } source && File.Exists(source))
                 {
-                    var mp4 = MediaTools.Remux(source); session.RecordingPath = mp4;
+                    var mp4 = MediaTools.Remux(source); session.RecordingPath = mp4; session.Duration = MediaTools.Duration(mp4);
                     foreach (var range in timeline.Ranges)
                         session.Clips.Add(new(Guid.NewGuid().ToString("N"), mp4, range.Start, Math.Min(range.End, session.Duration), range.Label, true));
                     File.Delete(source); // Only our own finalized intermediate; validated MP4 is retained.
@@ -210,7 +214,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         var origin = requestTime - duration;
         var start = Math.Max(0, range.Start - origin); var end = Math.Min(duration, range.End - origin);
         if (end <= start) throw new InvalidDataException("Replay timestamps could not be mapped to the saved file.");
-        session.Clips.Add(new(Guid.NewGuid().ToString("N"), saved, start, end, range.Label.Length == 0 ? "Continued moment" : range.Label, false));
+        session.Clips.Add(new(Guid.NewGuid().ToString("N"), saved, start, end, range.Label.Length == 0 ? "Continued moment" : range.Label, false, origin));
     }
     private static bool ProcessExists(int id) { try { using var p = Process.GetProcessById(id); return !p.HasExited; } catch (ArgumentException) { return false; } }
     private static void CheckDisk(EchoSettings settings)

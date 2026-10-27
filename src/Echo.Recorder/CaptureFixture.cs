@@ -9,9 +9,10 @@ internal sealed class CaptureFixture : Form
     private readonly SoundPlayer _sound;
     private readonly MemoryStream _wave;
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
-    public CaptureFixture(int frequency)
+    public CaptureFixture(int frequency, bool fullscreen = false)
     {
         Text = $"Echo Fixture {frequency}"; ClientSize = new(960, 540); BackColor = System.Drawing.Color.FromArgb(19, 25, 24); DoubleBuffered = true;
+        if (fullscreen) { FormBorderStyle = FormBorderStyle.None; Bounds = Screen.PrimaryScreen!.Bounds; }
         _wave = new();
         using (var w = new BinaryWriter(_wave, Encoding.ASCII, true))
         {

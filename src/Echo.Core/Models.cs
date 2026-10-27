@@ -7,10 +7,13 @@ namespace Echo.Core;
 public enum RecordingMode { Clips, FullMatch }
 [JsonConverter(typeof(JsonStringEnumConverter<MomentKind>))]
 public enum MomentKind { Kill, Assist, Death, Manual }
+[JsonConverter(typeof(JsonStringEnumConverter<CaptureMethod>))]
+public enum CaptureMethod { Window, FullscreenDisplay }
 
 public sealed record EchoSettings
 {
     public RecordingMode Mode { get; init; } = RecordingMode.Clips;
+    public CaptureMethod CaptureMethod { get; init; } = CaptureMethod.Window;
     public string OutputDirectory { get; init; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Echo");
     public string? ObsDirectory { get; init; }
     public int Width { get; init; } = 1920;
@@ -33,6 +36,7 @@ public sealed record EchoSettings
     public void Validate()
     {
         if (!Enum.IsDefined(Mode)) throw new ArgumentException("Unknown recording mode.");
+        if (!Enum.IsDefined(CaptureMethod)) throw new ArgumentException("Unknown capture method.");
         if (Width is < 640 or > 3840 || Height is < 360 or > 2160 || Width % 2 != 0 || Height % 2 != 0)
             throw new ArgumentException("Resolution must be even and between 640×360 and 3840×2160.");
         if (Fps is not (30 or 60)) throw new ArgumentException("Choose 30 or 60 FPS.");
@@ -63,13 +67,14 @@ public sealed record ClipRange(double Start, double End, List<Moment> Moments)
     public double Duration => End - Start;
     public string Label => string.Join(" · ", Moments.GroupBy(m => m.Kind).Select(g => g.Count() == 1 ? g.Key.ToString() : $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}s"));
 }
-public sealed record MediaClip(string Id, string Path, double Start, double End, string Label, bool IsVirtual);
+public sealed record MediaClip(string Id, string Path, double Start, double End, string Label, bool IsVirtual, double RecordingOrigin = 0);
 public sealed record Session
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public DateTimeOffset StartedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? EndedAt { get; set; }
     public string Champion { get; set; } = "League of Legends";
+    public string? Encoder { get; set; }
     public RecordingMode Mode { get; init; }
     public string? RecordingPath { get; set; }
     public string State { get; set; } = "Recording";

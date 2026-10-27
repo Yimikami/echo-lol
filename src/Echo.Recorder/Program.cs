@@ -11,7 +11,7 @@ internal static class Program
     {
         string? Arg(string key) { var i = Array.IndexOf(args, key); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         var paths = new HostPaths(Arg("--data-dir"));
-        if (args.Contains("--fixture")) { ApplicationConfiguration.Initialize(); Application.Run(new CaptureFixture(int.Parse(Arg("--tone") ?? "440"))); return 0; }
+        if (args.Contains("--fixture")) { ApplicationConfiguration.Initialize(); Application.Run(new CaptureFixture(int.Parse(Arg("--tone") ?? "440"), args.Contains("--fullscreen"))); return 0; }
         if (args.Contains("--help"))
         {
             Console.WriteLine("Echo.Recorder [--data-dir PATH] [--diagnose | --record --seconds 20 [--synthetic | --window TITLE] [--mode clips|full]]\nNo arguments: watch for League, with tray controls. Never captures the desktop implicitly."); return 0;
@@ -28,6 +28,8 @@ internal static class Program
                 Console.WriteLine("Diagnostics saved."); return 0;
             }
             if (args.Contains("--record")) return RecordTest(paths, args);
+            using var log = new BoundedLog(Path.Combine(paths.Root, "recorder.log"));
+            Console.SetOut(log); Console.SetError(log);
             using var cancellation = new CancellationTokenSource();
             var host = new RecorderHost(paths, cancellation.Token);
             var pipe = host.ServeAsync();
@@ -59,12 +61,14 @@ internal static class Program
         var target = synthetic ? null : Windows.Find(Arg("--window"));
         if (!synthetic && target == null) throw new InvalidOperationException("The selected test window was not found.");
         var settings = paths.LoadSettings() with { Mode = Arg("--mode") == "clips" ? RecordingMode.Clips : RecordingMode.FullMatch,
+            CaptureMethod = args.Contains("--fullscreen") ? CaptureMethod.FullscreenDisplay : CaptureMethod.Window,
             BeforeSeconds = 3, AfterSeconds = 2, BufferSeconds = 12, BufferMegabytes = 64 };
         var session = new Session { Mode = settings.Mode, Champion = synthetic ? "Synthetic capture test" : "Window capture test" };
         var folder = Path.Combine(settings.OutputDirectory, session.Id); Directory.CreateDirectory(folder);
         var planner = new MomentPlanner(settings); var scheduler = new ReplayScheduler(settings);
         using var engine = new ObsEngine(); engine.Initialize(settings, Path.Combine(paths.Root, "native"));
         engine.Start(settings, target, folder, synthetic);
+        session.Encoder = engine.Encoder;
         if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
         var clock = Stopwatch.StartNew(); using var process = Process.GetCurrentProcess();
         double cpuStart = process.TotalProcessorTime.TotalSeconds;
@@ -79,6 +83,7 @@ internal static class Program
             {
                 var now = clock.Elapsed.TotalSeconds;
                 if (!engine.Active) throw new InvalidOperationException(engine.LastError ?? "Encoder stopped.");
+                if (!synthetic && now > 8 && (settings.CaptureMethod == CaptureMethod.Window || target != null && Windows.IsForeground(target.ProcessId)) && !engine.HasVideo) throw new InvalidOperationException("The selected window did not provide video. Check capture permissions and window state.");
                 if (now >= nextEvent)
                 {
                     var id = events.Count + 1;
@@ -92,7 +97,7 @@ internal static class Program
                 if (now >= nextSample)
                 {
                     process.Refresh();
-                    samples.Add(new { Seconds = now, WorkingSetMB = process.WorkingSet64 / 1048576d, PrivateMB = process.PrivateMemorySize64 / 1048576d, engine.Frames, engine.DroppedFrames, GameAudioHooked = engine.AudioHooked() });
+                    samples.Add(new { Seconds = now, WorkingSetMB = process.WorkingSet64 / 1048576d, PrivateMB = process.PrivateMemorySize64 / 1048576d, engine.Frames, engine.DroppedFrames, engine.RenderingLagFrames, engine.EncodingLagFrames, GameAudioHooked = engine.AudioHooked() });
                     nextSample = now + 1;
                 }
                 Thread.Sleep(50);
@@ -104,7 +109,8 @@ internal static class Program
         session.Duration = clock.Elapsed.TotalSeconds; session.EndedAt = DateTimeOffset.UtcNow; session.State = "Complete";
         var cpuEnd = process.TotalProcessorTime.TotalSeconds;
         JsonStore.Write(Path.Combine(folder, "measurements.json"), new { Kind = synthetic ? "synthetic, not gameplay" : "window fixture, not gameplay", engine.Version, engine.Encoder,
-            Duration = session.Duration, CpuPercent = (cpuEnd - cpuStart) / session.Duration / Environment.ProcessorCount * 100, engine.Frames, engine.DroppedFrames, Samples = samples });
+            Duration = session.Duration, CpuPercent = (cpuEnd - cpuStart) / session.Duration / Environment.ProcessorCount * 100, engine.Frames, engine.DroppedFrames, engine.RenderingLagFrames, engine.EncodingLagFrames, engine.RenderedFrames, Samples = samples });
+        engine.Dispose();
         if (session.RecordingPath is { } source)
         {
             session.RecordingPath = MediaTools.Remux(source); File.Delete(source);

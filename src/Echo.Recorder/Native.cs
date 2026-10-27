@@ -22,7 +22,7 @@ internal static partial class Native
     [LibraryImport("kernel32", StringMarshalling = StringMarshalling.Utf16)] [return: MarshalAs(UnmanagedType.Bool)] internal static partial bool SetDllDirectoryW(string path);
     [LibraryImport("ole32")] internal static partial int CoInitializeEx(nint reserved, uint flags);
     [LibraryImport("ole32")] internal static partial void CoUninitialize();
-    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.I1)] internal static partial bool obs_startup(string locale, string config, nint profiler);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.I1)] internal static partial bool obs_startup(string locale, string? config, nint profiler);
     [LibraryImport(Lib)] internal static partial void obs_shutdown();
     [LibraryImport(Lib)] internal static partial nint obs_get_version_string();
     [LibraryImport(Lib)] internal static partial int obs_reset_video(ref VideoInfo info);
@@ -48,6 +48,10 @@ internal static partial class Native
     [LibraryImport(Lib)] internal static partial void obs_scene_release(nint scene);
     [LibraryImport(Lib)] internal static partial void obs_sceneitem_set_bounds_type(nint item, int type);
     [LibraryImport(Lib)] internal static partial void obs_sceneitem_set_bounds(nint item, ref Vector2 bounds);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.I1)] internal static partial bool obs_sceneitem_set_visible(nint item, [MarshalAs(UnmanagedType.I1)] bool visible);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void RenderCallback(nint parameter, uint width, uint height);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void obs_add_main_render_callback(RenderCallback callback, nint parameter);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void obs_remove_main_render_callback(RenderCallback callback, nint parameter);
     [StructLayout(LayoutKind.Sequential)] internal struct Vector2 { public float X, Y; }
     [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.I1)] internal static partial bool obs_enum_encoder_types(nuint index, out nint id);
     [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.I1)] internal static partial bool obs_enum_input_types(nuint index, out nint id);
@@ -58,6 +62,9 @@ internal static partial class Native
     [LibraryImport(Lib)] internal static partial void obs_encoder_release(nint encoder);
     [LibraryImport(Lib)] internal static partial nint obs_get_video();
     [LibraryImport(Lib)] internal static partial nint obs_get_audio();
+    [LibraryImport(Lib)] internal static partial uint obs_get_lagged_frames();
+    [LibraryImport(Lib)] internal static partial uint obs_get_total_frames();
+    [LibraryImport(Lib)] internal static partial uint video_output_get_skipped_frames(nint video);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint obs_output_create(string id, string name, nint settings, nint hotkeys);
     [LibraryImport(Lib)] internal static partial void obs_output_set_video_encoder(nint output, nint encoder);
     [LibraryImport(Lib)] internal static partial void obs_output_set_audio_encoder(nint output, nint encoder, nuint index);
