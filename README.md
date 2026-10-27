@@ -13,16 +13,19 @@ Automatically preserve your kills, assists and deaths, or record a full match an
 - **Clips only:** one hardware encoder, a bounded encoded replay buffer, and event-driven saves with configurable lead-in and tail.
 - **Full match:** record once, retain event ranges, and export only the moments you choose.
 - **Your game's audio:** application audio by default; no automatic fallback to desktop sound. Enabling desktop sound captures the full mix without doubling the game source.
-- **Local library:** English native WPF studio, a paged clip gallery, search/event filters, dedicated editor, fullscreen playback, volume/mute, a filmstrip timeline, safe deletion and MP4 export.
+- **Local library:** English native WPF interface, a paged clip gallery, search/event filters, large player, fullscreen playback, volume/mute, optional trimming, safe deletion and MP4 export.
+- **Manual moments:** configurable global shortcut, initially `Ctrl+Shift+F8`. Change or disable it in Highlights settings; conflicts are shown in the app.
+- **Automatic settings:** selections save immediately; numeric edits save after a short typing pause. Recording-source changes apply to the next recording. Full matches appear in Matches while recording and become playable after preparation.
+- **Cleaner highlights:** new recordings track intervals masked by the fullscreen focus guard. After gameplay, Echo can make highlight copies without those intervals, while preserving the full match and original media. Older recordings without this timing information are unchanged.
 - **Independent recorder:** closing the library leaves recording running. A small supervisor keeps detection available; each native capture worker handles one recording lifecycle. Tray controls pause capture, resume it, save a manual moment or exit the recorder. After a native fault, capture pauses with an error rather than repeatedly restarting against the same game.
 - **Hardware first:** NVENC, AMD AMF or Intel QSV H.264. Recording does not silently fall back to CPU encoding.
 - **Local files:** no account, uploads, cloud storage, in-game overlay or pixel analysis.
 
 ## Studio interface
 
-Browse a local gallery of your plays, then open one in a focused editor: large video preview, full-width timeline and a trim/export inspector. Recording, Audio, Highlights and Storage each have their own settings page.
+Browse a local gallery of your plays, then open one in a large player. Select **Trim** when you want the timeline and export controls. Recording, Audio, Highlights and Storage each have their own settings page. Settings save automatically.
 
-<img src="assets/screenshots/recording-settings.png" alt="Echo native recording settings with category navigation, aligned controls and a persistent save bar" />
+<img src="assets/screenshots/recording-settings.png" alt="Echo native recording settings with readable text, category navigation and automatic saving" />
 
 Native WPF settings view rendered at 1480×920. Manrope typography and regular-weight Phosphor icons are bundled with their upstream licenses. See [design decisions and references](DESIGN.md).
 
@@ -58,13 +61,13 @@ Echo never silently switches from window capture to display capture. No game pro
 
 ## Playback and trimming
 
-Open a moment from the gallery, then drag its timeline edges or enter `minutes:seconds` to choose a range. I/O sets the in/out point at the playhead; Reset restores the original range. Event markers preview the action with a three-second lead-in, limited to the available recording and trim range. Space toggles playback, F or a video double-click toggles fullscreen, Esc exits fullscreen or returns to the gallery, and M toggles mute. The volume slider changes playback audio independently of recording sources. Export saves an MP4. Full-match moments reference the original recording until export. Exports are serial in the UI, are disabled during recording, and stop if a recording starts. Export creates a new file and preserves the original.
+Open a moment from the gallery to watch it. Select **Trim** to show the timeline and range controls, then drag the edges or enter `minutes:seconds`. I/O sets the in/out point at the playhead; Reset restores the original range. Event markers preview the action with a three-second lead-in, limited to available footage. Markers also map correctly through automatically removed intervals. Space toggles playback, F or a video double-click toggles fullscreen, Esc exits fullscreen or returns to the gallery, and M toggles mute. The volume slider changes playback audio independently of recording sources. Export saves a new MP4 and preserves the original. Full-match highlights reference the original recording unless a cleaned copy is prepared. Exports are serial in the UI, are disabled during recording, and stop if a recording starts.
 
 The Delete action moves standalone video files to the Windows Recycle Bin. Removing a highlight that references a full match only removes that highlight; the shared match stays. Deleting a full match removes its dependent highlight entries.
 
 Opening Echo starts automatic League detection without pressing Record, and resumes a healthy paused recorder. A visible native error requires retry rather than an automatic crash loop.
 
-Recording uses MKV while active so a normal application interruption does not depend on finalizing an MP4 header. After recording stops, Echo validates and remuxes to MP4 for playback without re-encoding. If preparation fails, the original file and session information remain available. A replay save may retain a little extra footage around the selected range; exported ranges are encoded for accurate boundaries.
+Recording uses MKV while active so a normal application interruption does not depend on finalizing an MP4 header. After recording stops, Echo validates and remuxes to MP4 for playback without re-encoding. MKV originals are retained. Removing masked intervals requires hardware re-encoding of separate highlight copies; queued preparation yields when another League game appears. This uses actual focus-mask timings rather than guessing from dark pixels. Full-match playback retains those intervals. If preparation fails, the original file and session information remain available. A replay save may retain a little extra footage around the selected range; exported ranges are encoded for accurate boundaries.
 
 ## Verify and measure
 

@@ -35,7 +35,8 @@ public partial class MainWindow : Window
     private volatile bool _closing;
     private double _duration;
     private int _ticks, _selectionVersion, _galleryPage;
-    private bool _bindingGallery;
+    private bool _bindingGallery, _trimOpen, _settingsDirty;
+    private readonly DispatcherTimer _settingsTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private const int GalleryPageSize = 32;
     private string _settingsCategory = "Recording";
     private WindowState _priorWindowState;
@@ -49,14 +50,20 @@ public partial class MainWindow : Window
         try { _settings = paths.LoadSettings(); }
         catch (Exception) { _settings = new(); }
         InitializeComponent(); LoadSettingsFields(); SetNav("Clips"); SetFilter();
+        _settingsTimer.Tick += (_, _) => { _settingsTimer.Stop(); SaveSettingsClick(this, new()); };
+        SettingsPanel.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, new SelectionChangedEventHandler((_, e) => { if (e.OriginalSource is ComboBox) AutoSave(false); }));
+        SettingsPanel.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((_, _) => AutoSave(false)));
+        SettingsPanel.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((_, _) => AutoSave(false)));
+        SettingsPanel.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource != OutputInput) AutoSave(true); }));
+        OutputInput.LostKeyboardFocus += (_, _) => AutoSave(false);
         _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
         Player.Volume = VolumeSlider.Value;
         Timeline.SeekRequested += SeekTo;
-        Timeline.MomentRequested += t => PreviewMoment(t + (_selected?.Clip.RecordingOrigin ?? 0));
+        Timeline.MomentRequested += t => { SeekTo(Math.Max(Timeline.SelectionStart, t - 3)); SetPlaying(true); };
         Timeline.RangeChanged += (_, _) => UpdateRange();
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
         _timer.Tick += (_, _) => Tick(); _timer.Start();
-        Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); Player.Close(); };
+        Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
     }
     private void Tick()
     {
@@ -70,7 +77,7 @@ public partial class MainWindow : Window
         var position = Math.Clamp(Player.Position.TotalSeconds, 0, _duration);
         _updating = true; Seek.Value = position; _updating = false;
         if (Math.Abs(Timeline.Position - position) > .01) { Timeline.Position = position; Timeline.InvalidateVisual(); }
-        TimeLabel.Text = $"{Time(position)} / {Time(_duration)}";
+        UpdatePlaybackTime(position);
         if (_playing && position >= Timeline.SelectionEnd) SetPlaying(false);
     }
     private bool CaptureActive()
@@ -85,12 +92,13 @@ public partial class MainWindow : Window
             var status = JsonStore.Read<RecorderStatus>(_paths.Status);
             bool fresh = status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8);
             _status = fresh ? status! : new() { State = "Recorder offline", UpdatedAt = DateTimeOffset.MinValue };
-            HeaderStatus.Text = _status.Recording ? "Recording " + Time(_status.ElapsedSeconds) : !fresh ? "Capture offline" : _status.Error != null ? "Capture needs attention" : _status.Armed ? "Auto capture on" : "Capture paused";
+            HeaderStatus.Text = _status.Recording ? (_status.ActiveMode == RecordingMode.FullMatch ? "Full match " : "Highlights ") + Time(_status.ElapsedSeconds) : !fresh ? "Capture offline" : _status.Error != null ? "Capture needs attention" : _status.Armed ? "Auto capture on" : "Capture paused";
             StatusDot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_status.Recording ? "#F1B7BD" : fresh && _status.Armed ? "#C2D4FF" : "#A1A7B2"));
             CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
             CaptureGlyph.Kind = _status.Armed ? "Recording" : "Play";
             RecorderLabel.Text = !fresh ? "Offline" : _status.Armed ? "Auto on" : "Paused";
             ErrorBanner.Text = _status.Error ?? "";
+            ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
             ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
             ExportButton.ToolTip = CaptureActive() ? "Export is available after the match." : "Save the selected range as a new MP4";
             ExportHint.Text = CaptureActive() ? "Finish your match to export clips." : "Save your selection as a new MP4.";
@@ -113,18 +121,18 @@ public partial class MainWindow : Window
             {
                 Session? session;
                 try { session = JsonStore.Read<Session>(file.FullName); } catch (Exception e) when (e is IOException or JsonException) { continue; }
-                if (session == null || session.EndedAt == null) continue;
+                if (session == null) continue;
                 if (_matches)
                 {
-                    if (session.RecordingPath is { } path && File.Exists(path)) _items.Add(new(session, new(session.Id, path, 0, session.Duration, "Full match", true), FindMatchPoster(file.DirectoryName!, session)));
+                    if (session.Mode == RecordingMode.FullMatch && session.RecordingPath is { } path && (File.Exists(path) || session.EndedAt == null)) _items.Add(new(session, new(session.Id, path, 0, session.Duration, "Full match", true), FindMatchPoster(file.DirectoryName!, session)));
                 }
-                else foreach (var clip in session.Clips) if (File.Exists(clip.Path)) _items.Add(new(session, clip, Path.Combine(file.DirectoryName!, clip.Id + ".jpg")));
+                else if (session.EndedAt != null) foreach (var clip in session.Clips) if (!clip.VideoUnavailable && File.Exists(clip.Path)) _items.Add(new(session, clip, clip.ThumbnailPath ?? Path.Combine(file.DirectoryName!, clip.Id + ".jpg")));
             }
             _items.Sort((a, b) => b.Session.StartedAt.CompareTo(a.Session.StartedAt)); ApplyFilter();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ErrorBanner.Text = "Could not open the recording folder: " + e.Message; }
     }
-    private static string? FindMatchPoster(string folder, Session session) => session.Clips.Select(c => Path.Combine(folder, c.Id + ".jpg")).FirstOrDefault(File.Exists);
+    private static string? FindMatchPoster(string folder, Session session) => new[] { Path.Combine(folder, "match.jpg") }.Concat(session.Clips.Select(c => c.ThumbnailPath ?? Path.Combine(folder, c.Id + ".jpg"))).FirstOrDefault(File.Exists);
     private void ApplyFilter(bool resetPage = false)
     {
         if (ClipList == null || SearchBox == null || SortBox == null) return;
@@ -139,9 +147,9 @@ public partial class MainWindow : Window
         ClipList.ItemsSource = visible.Skip(_galleryPage * GalleryPageSize).Take(GalleryPageSize).ToArray();
         ClipList.SelectedItem = null;
         _bindingGallery = false;
-        LibraryCount.Text = $"{visible.Length} {(_matches ? "matches" : "moments")} saved on this device";
+        LibraryCount.Text = $"{visible.Length} {(_matches ? "matches" : "moments")} ";
         EmptyGallery.Visibility = visible.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyList.Text = _items.Count == 0 ? (_matches ? "Choose Entire match in Recording settings to save complete games here." : "Keep Echo running and play League. Your kills, assists and deaths will appear here automatically.") : "No clips match your search. Try another event or search term.";
+        EmptyList.Text = _items.Count == 0 ? (_matches ? (_settings.Mode == RecordingMode.FullMatch ? "Your next full match will appear here." : "Choose Entire match in Recording settings to save complete games here.") : "Keep Echo running and play League. Your kills, assists and deaths will appear here automatically.") : "No clips match your search. Try another event or search term.";
         PageLabel.Text = $"Page {_galleryPage + 1} of {pages}"; PreviousPageButton.IsEnabled = _galleryPage > 0; NextPageButton.IsEnabled = _galleryPage < pages - 1;
         if (visible.Length == 0 && _selected == null) ClearPlayer();
     }
@@ -156,7 +164,7 @@ public partial class MainWindow : Window
     private void NextPageClick(object sender, RoutedEventArgs e) { _galleryPage++; ApplyFilter(); }
     private void OpenEditor()
     {
-        LibraryPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; EditorPanel.Visibility = Visibility.Visible;
+        LibraryPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; EditorPanel.Visibility = Visibility.Visible; SetTrimOpen(false);
     }
     private void BackToLibraryClick(object sender, RoutedEventArgs e)
     {
@@ -177,6 +185,7 @@ public partial class MainWindow : Window
     private void ClipSelected(object sender, SelectionChangedEventArgs e)
     {
         if (_bindingGallery || ClipList.SelectedItem is not ClipItem item) return;
+        if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
         OpenEditor();
         if (_selected?.Clip.Id == item.Clip.Id && _selected.Clip.Path == item.Clip.Path) { _selected = item; return; }
         _selectionVersion++; _selected = item; _duration = 0; SetPlaying(false); Player.Close(); EmptyPlayer.Visibility = Visibility.Collapsed;
@@ -193,10 +202,10 @@ public partial class MainWindow : Window
         _updating = true; Seek.Maximum = _duration;
         Timeline.Duration = _duration; Timeline.SelectionStart = Math.Clamp(_selected.Clip.Start, 0, _duration);
         Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration);
-        Timeline.Moments = _selected.Session.Moments.Select(m => (m.RecordingTime - _selected.Clip.RecordingOrigin, m.Kind)).ToArray();
+        Timeline.Moments = _selected.Session.Moments.Select(m => (Time: PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime), m.Kind)).Where(m => m.Time.HasValue).Select(m => (m.Time!.Value, m.Kind)).ToArray();
         _updating = false; UpdateRange();
-        var first = _selected.Session.Moments.FirstOrDefault(m => m.RecordingTime - _selected.Clip.RecordingOrigin >= Timeline.SelectionStart && m.RecordingTime - _selected.Clip.RecordingOrigin <= Timeline.SelectionEnd);
-        SeekTo(first == null ? Timeline.SelectionStart : PlaybackNavigation.BeforeEvent(first.RecordingTime, _selected.Clip.RecordingOrigin, Timeline.SelectionStart, Timeline.SelectionEnd));
+        var first = _selected.Session.Moments.FirstOrDefault(m => PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime) is { } t && t >= Timeline.SelectionStart && t <= Timeline.SelectionEnd);
+        SeekTo(first == null ? Timeline.SelectionStart : PlaybackNavigation.BeforeEvent(_selected.Clip, first.RecordingTime, Timeline.SelectionStart, Timeline.SelectionEnd));
         Player.Pause(); PlayerPoster.Visibility = PlayerPoster.Source != null ? Visibility.Visible : Visibility.Collapsed;
         RefreshStatus(); _ = LoadFilmstrip(_selected.Clip.Path, _duration, _selectionVersion);
     }
@@ -209,7 +218,8 @@ public partial class MainWindow : Window
         {
             if (_closing || version != _selectionVersion || CaptureActive()) return;
             var posterAt = Timeline.Position;
-            var posterPath = Path.Combine(_paths.Root, "timeline-cache", $"poster-{_selected!.Clip.Id}-{posterAt:0}.jpg");
+            var mediaKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source)))[..12];
+            var posterPath = Path.Combine(_paths.Root, "timeline-cache", $"poster-{mediaKey}-{posterAt:0}.jpg");
             var poster = await Task.Run(() =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(posterPath)!);
@@ -223,7 +233,7 @@ public partial class MainWindow : Window
             {
                 if (_closing || version != _selectionVersion || CaptureActive()) return;
                 var at = Math.Min(Math.Max(0, duration - .15), duration * (i + .5) / 8);
-                var cache = Path.Combine(_paths.Root, "timeline-cache", _selected!.Clip.Id + "-" + i + ".jpg");
+                var cache = Path.Combine(_paths.Root, "timeline-cache", mediaKey + "-" + i + ".jpg");
                 var frame = await Task.Run(() =>
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
@@ -261,12 +271,12 @@ public partial class MainWindow : Window
         if (_selected == null || _duration <= 0) return;
         var at = Math.Clamp(seconds, 0, _duration); Player.Position = TimeSpan.FromSeconds(at); PlayerPoster.Visibility = Visibility.Collapsed;
         Timeline.Position = at; Timeline.InvalidateVisual(); _updating = true; Seek.Value = at; _updating = false;
-        TimeLabel.Text = $"{Time(at)} / {Time(_duration)}";
+        UpdatePlaybackTime(at);
     }
     private void PreviewMoment(double recordingTime)
     {
         if (_selected == null) return;
-        SeekTo(PlaybackNavigation.BeforeEvent(recordingTime, _selected.Clip.RecordingOrigin, Timeline.SelectionStart, Timeline.SelectionEnd)); SetPlaying(true);
+        SeekTo(PlaybackNavigation.BeforeEvent(_selected.Clip, recordingTime, Timeline.SelectionStart, Timeline.SelectionEnd)); SetPlaying(true);
     }
     private void SeekChanged(object sender, RoutedPropertyChangedEventArgs<double> e) { if (!_updating) SeekTo(e.NewValue); }
     private void SeekDown(object sender, MouseButtonEventArgs e) => _seeking = true;
@@ -292,8 +302,10 @@ public partial class MainWindow : Window
     private void UpdateRange()
     {
         if (StartInput == null || EndInput == null) return;
+        _updating = true;
         StartInput.Text = Time(Timeline.SelectionStart, true); EndInput.Text = Time(Timeline.SelectionEnd, true);
-        RangeLabel.Text = _duration > 0 ? Time(Timeline.SelectionEnd - Timeline.SelectionStart, true) : "00:00.0"; Timeline.InvalidateVisual();
+        RangeLabel.Text = _duration > 0 ? Time(Timeline.SelectionEnd - Timeline.SelectionStart, true) : "00:00.0"; Timeline.InvalidateVisual(); _updating = false;
+        UpdateSeekBounds();
     }
     private void ResetTrimClick(object sender, RoutedEventArgs e) { if (_selected == null) return; Timeline.SelectionStart = Math.Clamp(_selected.Clip.Start, 0, _duration); Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration); UpdateRange(); SeekTo(Timeline.SelectionStart); }
     private void SetInClick(object sender, RoutedEventArgs e) { if (_duration <= 0) return; Timeline.SelectionStart = Math.Min(Player.Position.TotalSeconds, Math.Max(0, Timeline.SelectionEnd - .1)); UpdateRange(); }
@@ -301,6 +313,47 @@ public partial class MainWindow : Window
     private static string Time(double seconds, bool precise = false) { var t = TimeSpan.FromSeconds(Math.Max(0, double.IsFinite(seconds) ? seconds : 0)); return $"{(int)t.TotalMinutes:00}:{t.Seconds:00}" + (precise ? $".{t.Milliseconds / 100}" : ""); }
     private static bool TryTime(string text, out double seconds) { seconds = 0; var parts = text.Trim().Split(':'); if (parts.Length > 3) return false; foreach (var part in parts) { if (!double.TryParse(part, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value) || value < 0) return false; seconds = seconds * 60 + value; } return true; }
 
+    private void ToggleTrimClick(object sender, RoutedEventArgs e) => SetTrimOpen(!_trimOpen);
+    private void SetTrimOpen(bool open)
+    {
+        _trimOpen = open; Inspector.Visibility = TrimWorkbench.Visibility = open && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
+        InspectorColumn.Width = new GridLength(open && !_fullscreen ? 250 : 0);
+        EditorPanel.RowDefinitions[2].Height = new GridLength(open && !_fullscreen ? 216 : 0);
+        TrimButtonLabel.Text = open ? "Done" : "Trim";
+        UpdateSeekBounds();
+    }
+    private void UpdateSeekBounds()
+    {
+        if (_duration <= 0) return;
+        _updating = true; Seek.Minimum = _trimOpen ? 0 : Timeline.SelectionStart; Seek.Maximum = _trimOpen ? _duration : Math.Max(Seek.Minimum, Timeline.SelectionEnd); _updating = false;
+    }
+    private void UpdatePlaybackTime(double position)
+    {
+        var origin = _trimOpen ? 0 : Timeline.SelectionStart;
+        var length = _trimOpen ? _duration : Timeline.SelectionEnd - Timeline.SelectionStart;
+        TimeLabel.Text = $"{Time(position - origin)} / {Time(length)}";
+    }
+    private void AutoSave(bool debounce)
+    {
+        if (_updating || _closing) return;
+        _settingsDirty = true; _settingsTimer.Stop();
+        if (debounce) { SettingsMessage.Text = "Saving…"; _settingsTimer.Start(); }
+        else SaveSettingsClick(this, new());
+    }
+    private void ShortcutKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift) return;
+        if (key == Key.Escape) { Keyboard.ClearFocus(); return; }
+        if (key is Key.Delete or Key.Back) { ShortcutInput.Text = ""; AutoSave(false); return; }
+        var mods = Keyboard.Modifiers; var parts = new List<string>();
+        if (mods.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl"); if (mods.HasFlag(ModifierKeys.Alt)) parts.Add("Alt"); if (mods.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
+        var vk = KeyInterop.VirtualKeyFromKey(key); parts.Add(vk is >= 0x30 and <= 0x5A ? ((char)vk).ToString() : key.ToString());
+        try { ShortcutInput.Text = ShortcutGesture.Parse(string.Join('+', parts))?.Text ?? ""; AutoSave(false); }
+        catch (ArgumentException ex) { ShortcutMessage.Text = ex.Message; }
+    }
+    private void ClearShortcutClick(object sender, RoutedEventArgs e) { ShortcutInput.Text = ""; AutoSave(false); }
     private void FullscreenClick(object sender, RoutedEventArgs e) => SetFullscreen(!_fullscreen);
     private void VideoClicked(object sender, MouseButtonEventArgs e) { if (e.ClickCount == 2) { SetFullscreen(!_fullscreen); e.Handled = true; } }
     private void SetFullscreen(bool fullscreen)
@@ -313,20 +366,23 @@ public partial class MainWindow : Window
             WindowState = WindowState.Normal; WindowChrome.SetWindowChrome(this, null); ResizeMode = ResizeMode.NoResize; WindowState = WindowState.Maximized;
         }
         else { WindowState = WindowState.Normal; ResizeMode = _priorResizeMode; WindowChrome.SetWindowChrome(this, _priorChrome); WindowState = _priorWindowState; }
-        foreach (var element in new UIElement[] { TitleBar, Sidebar, SelectedHeading, Inspector, TrimWorkbench }) element.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var element in new UIElement[] { TitleBar, Sidebar, SelectedHeading }) element.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         ExitFullscreenButton.Visibility = fullscreen ? Visibility.Visible : Visibility.Collapsed;
-        InspectorColumn.Width = new GridLength(fullscreen ? 0 : 250);
+        InspectorColumn.Width = new GridLength(!fullscreen && _trimOpen ? 250 : 0);
+        Inspector.Visibility = TrimWorkbench.Visibility = !fullscreen && _trimOpen ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.RowDefinitions[0].Height = new GridLength(fullscreen ? 0 : 70);
-        EditorPanel.RowDefinitions[2].Height = new GridLength(fullscreen ? 0 : 232);
+        EditorPanel.RowDefinitions[2].Height = new GridLength(!fullscreen && _trimOpen ? 216 : 0);
         VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(24, 20, 24, 0);
         Grid.SetRow(EditorPanel, fullscreen ? 0 : 2); Grid.SetColumn(EditorPanel, fullscreen ? 0 : 1); Grid.SetRowSpan(EditorPanel, fullscreen ? 3 : 1); Grid.SetColumnSpan(EditorPanel, fullscreen ? 2 : 1);
     }
     private void WindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (Keyboard.FocusedElement == ShortcutInput) return;
         if (e.Key == Key.Escape)
         {
             if (_deleteCandidate != null) CancelDeleteClick(this, e);
             else if (_fullscreen) SetFullscreen(false);
+            else if (_trimOpen) SetTrimOpen(false);
             else if (EditorPanel.Visibility == Visibility.Visible) BackToLibraryClick(this, e);
             e.Handled = true; return;
         }
@@ -336,8 +392,8 @@ public partial class MainWindow : Window
         if (e.Key == Key.Space && e.OriginalSource is not Button) PlayClick(this, e);
         else if (e.Key == Key.F) SetFullscreen(!_fullscreen);
         else if (e.Key == Key.M) MuteClick(this, e);
-        else if (e.Key == Key.I) SetInClick(this, e);
-        else if (e.Key == Key.O) SetOutClick(this, e);
+        else if (e.Key == Key.I) { SetTrimOpen(true); SetInClick(this, e); }
+        else if (e.Key == Key.O) { SetTrimOpen(true); SetOutClick(this, e); }
         else if (e.Key == Key.Delete) DeleteClick(this, e);
         else if (e.Key is Key.Left or Key.Right && e.OriginalSource is not Controls.ClipTimeline && e.OriginalSource is not Slider) SeekTo(Player.Position.TotalSeconds + (e.Key == Key.Right ? 5 : -5));
         else return;
@@ -508,10 +564,11 @@ public partial class MainWindow : Window
         ModeBox.SelectedIndex = _settings.Mode == RecordingMode.Clips ? 0 : 1; GameAudioBox.IsChecked = _settings.GameAudio; DesktopAudioBox.IsChecked = _settings.DesktopAudio; MicBox.IsChecked = _settings.Microphone;
         CaptureMethodBox.SelectedIndex = _settings.CaptureMethod == CaptureMethod.Window ? 0 : 1;
         KillsBox.IsChecked = _settings.CaptureKills; AssistsBox.IsChecked = _settings.CaptureAssists; DeathsBox.IsChecked = _settings.CaptureDeaths;
+        ShortcutInput.Text = _settings.ManualShortcut; RemoveMaskedBox.IsChecked = _settings.RemoveMaskedHighlights;
         BeforeInput.Text = _settings.BeforeSeconds.ToString(CultureInfo.InvariantCulture); AfterInput.Text = _settings.AfterSeconds.ToString(CultureInfo.InvariantCulture);
         ResolutionBox.SelectedIndex = _settings.Height == 720 ? 0 : 1; FpsBox.SelectedIndex = _settings.Fps == 30 ? 0 : 1; OutputInput.Text = _settings.OutputDirectory;
     }
-    private void BrowseClick(object sender, RoutedEventArgs e) { var dialog = new OpenFolderDialog { Title = "Choose recording folder" }; if (dialog.ShowDialog(this) == true) OutputInput.Text = dialog.FolderName; }
+    private void BrowseClick(object sender, RoutedEventArgs e) { var dialog = new OpenFolderDialog { Title = "Choose recording folder" }; if (dialog.ShowDialog(this) == true) { OutputInput.Text = dialog.FolderName; AutoSave(false); } }
     private void SaveSettingsClick(object sender, RoutedEventArgs e)
     {
         try
@@ -519,12 +576,12 @@ public partial class MainWindow : Window
             var before = int.Parse(BeforeInput.Text, CultureInfo.InvariantCulture); var after = int.Parse(AfterInput.Text, CultureInfo.InvariantCulture);
             var buffer = Math.Max(40, before + after + 5);
             var settings = _settings with { Mode = ModeBox.SelectedIndex == 0 ? RecordingMode.Clips : RecordingMode.FullMatch, CaptureMethod = CaptureMethodBox.SelectedIndex == 0 ? CaptureMethod.Window : CaptureMethod.FullscreenDisplay, GameAudio = GameAudioBox.IsChecked == true,
-                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
+                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
                 CaptureDeaths = DeathsBox.IsChecked == true, BeforeSeconds = before, AfterSeconds = after, BufferSeconds = buffer,
                 BufferMegabytes = Math.Max(128, (int)Math.Ceiling(_settings.BitrateKbps * 1000d / 8 * buffer * 1.3 / 1048576)),
                 Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim() };
-            settings.Validate(); Directory.CreateDirectory(settings.OutputDirectory); JsonStore.Write(_paths.Settings, settings); _settings = settings;
-            SettingsError.Text = ""; SettingsMessage.Text = "Saved. These settings apply to the next recording."; _catalogSignature = "";
+            settings.Validate(); JsonStore.Write(_paths.Settings, settings); _settings = settings;
+            SettingsError.Text = ""; SettingsMessage.Text = CaptureActive() ? "Saved. Recording changes apply next match." : "Saved"; _settingsDirty = false; _catalogSignature = "";
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException or OverflowException or IOException or UnauthorizedAccessException) { SettingsError.Text = ex.Message; SettingsMessage.Text = "Settings were not saved."; }
     }
@@ -538,6 +595,18 @@ internal sealed class ClipItem
     public MediaClip Clip { get; }
     public string Title => Session.Champion;
     public string Label => Clip.Label;
+    public bool IsReady => Session.EndedAt != null && !Clip.VideoUnavailable && File.Exists(Clip.Path) && !Clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && (!Session.PreparationPending || Clip.Id == Session.Id);
+    public string StateLabel => Session.EndedAt == null ? "Recording" : !IsReady ? "Preparing…" : "";
+    public Visibility StateVisibility => StateLabel.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    private IEnumerable<Moment> Events => Session.Moments.Where(m => Clip.EventIds != null ? Clip.EventIds.Contains(m.EventId) : PlaybackNavigation.FileTime(Clip, m.RecordingTime) is { } t && t >= Clip.Start && t <= Clip.End);
+    public int KillCount => Events.Count(m => m.Kind == MomentKind.Kill);
+    public int DeathCount => Events.Count(m => m.Kind == MomentKind.Death);
+    public int AssistCount => Events.Count(m => m.Kind == MomentKind.Assist);
+    public int ManualCount => Events.Count(m => m.Kind == MomentKind.Manual);
+    public Visibility KillVisibility => KillCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility DeathVisibility => DeathCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility AssistVisibility => AssistCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ManualVisibility => ManualCount > 0 ? Visibility.Visible : Visibility.Collapsed;
     public string ShortDate => Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy  HH:mm", CultureInfo.InvariantCulture);
     public string DateLabel => ShortDate;
     public string DurationLabel => TimeSpan.FromSeconds(Math.Max(0, Clip.End - Clip.Start)).ToString(@"mm\:ss");

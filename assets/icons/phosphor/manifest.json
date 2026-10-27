@@ -30,5 +30,8 @@
   "Volume": "speaker-high",
   "ExitFullscreen": "arrows-in",
   "VolumeMuted": "speaker-slash",
-  "Pause": "pause"
+  "Pause": "pause",
+  "Kill": "sword",
+  "Death": "skull",
+  "Assist": "handshake"
 }

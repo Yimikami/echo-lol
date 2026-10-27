@@ -72,7 +72,16 @@ public sealed class ClipTimeline : FrameworkElement
         {
             var color = moment.Kind == MomentKind.Death ? Brush("#FFA891") : moment.Kind == MomentKind.Assist ? Brush("#A3C8ED") : Accent;
             dc.DrawRoundedRectangle(color, null, new Rect(X(moment.Time) - 2, MarkerY - 6, 4, 12), 2, 2);
-            if (X(moment.Time) > lastLabelX + 84) { Text(dc, moment.Kind.ToString(), new Point(X(moment.Time) + 7, MarkerY - 8), color); lastLabelX = X(moment.Time); }
+            if (X(moment.Time) > lastLabelX + 92)
+            {
+                var kind = moment.Kind == MomentKind.Manual ? "Bookmark" : moment.Kind.ToString();
+                if (TryFindResource("Phosphor." + kind) is Geometry icon)
+                {
+                    dc.PushTransform(new TranslateTransform(X(moment.Time) + 7, MarkerY - 7)); dc.PushTransform(new ScaleTransform(14d / 256, 14d / 256));
+                    dc.DrawGeometry(color, null, icon); dc.Pop(); dc.Pop();
+                }
+                Text(dc, moment.Kind.ToString(), new Point(X(moment.Time) + 25, MarkerY - 8), color); lastLabelX = X(moment.Time);
+            }
         }
         var play = X(Position);
         dc.DrawLine(new Pen(Brushes.White, 1.5), new Point(play, Top - 4), new Point(play, Top + StripHeight + 5));

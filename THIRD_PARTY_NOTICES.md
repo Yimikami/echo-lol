@@ -12,7 +12,7 @@ WPF UI 4.3.0 is copyright Leszek Pomianowski and contributors, licensed MIT. Its
 
 Phosphor Core regular icons are copyright Phosphor Icons and licensed MIT. Exact upstream SVG assets and their commit are retained under `assets/icons/phosphor/`; the UI uses a format conversion into WPF geometries. See `assets/licenses/Phosphor-LICENSE.txt` and https://github.com/phosphor-icons/core.
 
-Manrope is copyright the Manrope Project Authors and licensed SIL OFL 1.1. The original Google Fonts variable font is retained in `assets/font-source/`; 400/600/700 static instances are embedded in the UI. See `assets/licenses/Manrope-OFL.txt`, `assets/design-provenance.json` and https://github.com/google/fonts/tree/main/ofl/manrope. No system-wide font installation is required.
+Manrope is copyright the Manrope Project Authors and licensed SIL OFL 1.1. The original Google Fonts variable font is retained in `assets/font-source/`; 400/500/600/700 static instances are embedded in the UI. See `assets/licenses/Manrope-OFL.txt`, `assets/design-provenance.json` and https://github.com/google/fonts/tree/main/ofl/manrope. No system-wide font installation is required.
 
 .NET and WPF are Microsoft projects under the MIT license. This initial package is framework-dependent and requires the .NET 10 Desktop Runtime.
 

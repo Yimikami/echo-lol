@@ -27,6 +27,8 @@ public partial class MainWindow
         if (ClipList.Items.Count > 0)
         {
             ClipList.SelectedIndex = 0; PrepareVerificationPreview();
+            Check("watching starts without trim controls", !_trimOpen && Inspector.Visibility == Visibility.Collapsed && TrimWorkbench.Visibility == Visibility.Collapsed);
+            ToggleTrimClick(this, new()); Check("trim is an explicit optional action", _trimOpen && Inspector.Visibility == Visibility.Visible);
             Check("selecting a real clip opens the editor", _selected != null && EditorPanel.Visibility == Visibility.Visible && LibraryPanel.Visibility == Visibility.Collapsed);
             VolumeSlider.Value = .35; Check("volume controls media volume", Math.Abs(Player.Volume - .35) < .001);
             MuteClick(this, new()); Check("mute toggles playback", Player.IsMuted);
@@ -37,7 +39,7 @@ public partial class MainWindow
             if (marker != null)
             {
                 PreviewMoment(marker.RecordingTime);
-                Check("events preview three seconds before action", Math.Abs(Timeline.Position - PlaybackNavigation.BeforeEvent(marker.RecordingTime, _selected.Clip.RecordingOrigin, Timeline.SelectionStart, Timeline.SelectionEnd)) < .01);
+                Check("events preview three seconds before action", Math.Abs(Timeline.Position - PlaybackNavigation.BeforeEvent(_selected.Clip, marker.RecordingTime, Timeline.SelectionStart, Timeline.SelectionEnd)) < .01);
                 SetPlaying(false);
             }
             DeleteClick(this, new()); Check("deletion is protected by confirmation", _deleteCandidate != null && DeleteOverlay.Visibility == Visibility.Visible);
@@ -54,6 +56,9 @@ public partial class MainWindow
             {
                 ClipList.SelectedIndex = 0; PrepareVerificationPreview();
                 await LoadFilmstrip(_selected!.Clip.Path, _duration, _selectionVersion);
+                await RenderPreview(Path.Combine(output, $"watch-{size.Width}.png"), size);
+                Check($"normal player hides editing at {size.Width}px", Inspector.Visibility == Visibility.Collapsed && TrimWorkbench.Visibility == Visibility.Collapsed);
+                ToggleTrimClick(this, new());
                 await RenderPreview(Path.Combine(output, $"editor-{size.Width}.png"), size);
                 var track = (System.Windows.Controls.Primitives.Track)VolumeSlider.Template.FindName("PART_Track", VolumeSlider);
                 File.WriteAllText(Path.Combine(output, "slider-layout.txt"), $"Value={track.Value} min={track.Minimum} max={track.Maximum} track={track.ActualWidth}x{track.ActualHeight} decrease={track.DecreaseRepeatButton.ActualWidth}x{track.DecreaseRepeatButton.ActualHeight} increase={track.IncreaseRepeatButton.ActualWidth}x{track.IncreaseRepeatButton.ActualHeight}");
@@ -75,6 +80,17 @@ public partial class MainWindow
             Check("invalid settings stay visible and are not written", !File.Exists(testPaths.Settings) && probe.SettingsError.Text.Length > 0);
             probe.BeforeInput.Text = "18"; probe.OutputInput.Text = Path.Combine(testPaths.Root, "recordings"); probe.MicBox.IsChecked = false; probe.SaveSettingsClick(this, new());
             Check("valid settings persist to the selected profile", JsonStore.Read<EchoSettings>(testPaths.Settings)?.BeforeSeconds == 18 && probe.SettingsError.Text.Length == 0);
+            probe.DesktopAudioBox.IsChecked = true;
+            Check("desktop audio toggle saves without a button", JsonStore.Read<EchoSettings>(testPaths.Settings)?.DesktopAudio == true);
+            probe.ModeBox.SelectedIndex = 1;
+            Check("entire match selection saves immediately", JsonStore.Read<EchoSettings>(testPaths.Settings)?.Mode == RecordingMode.FullMatch);
+            probe.ShortcutInput.Text = "Ctrl+Alt+F9"; probe.AutoSave(false);
+            Check("manual shortcut is saved with settings", JsonStore.Read<EchoSettings>(testPaths.Settings)?.ManualShortcut == "Ctrl+Alt+F9");
+            var match = new Session { Mode = RecordingMode.FullMatch, RecordingPath = Path.Combine(testPaths.Root, "live.mkv") };
+            var matchFolder = Path.Combine(probe._settings.OutputDirectory, match.Id); Directory.CreateDirectory(matchFolder); JsonStore.Write(Path.Combine(matchFolder, "session.json"), match);
+            probe._matches = true; probe.RefreshCatalog(true);
+            Check("in-progress full match is visible before finalization", probe.ClipList.Items.Count == 1 && probe.ClipList.Items.Cast<ClipItem>().Single().StateLabel == "Recording");
+            probe._matches = false; probe._items.Clear();
             for (int i = 0; i < 65; i++) probe._items.Add(new(new Session { Champion = i == 0 ? "Unique champion" : "Fixture", StartedAt = DateTimeOffset.UtcNow.AddSeconds(-i) }, new(i.ToString(), "", 0, 10, "Kill", false), null));
             probe.ApplyFilter(); Check("gallery page is bounded to 32 items", probe.ClipList.Items.Count == 32);
             probe.NextPageClick(this, new()); probe.NextPageClick(this, new()); Check("gallery pagination reaches the final item", probe.ClipList.Items.Count == 1);
@@ -87,7 +103,7 @@ public partial class MainWindow
     {
         if (_selected == null) return;
         _duration = Math.Max(.1, _selected.Clip.End); Timeline.Duration = _duration; Timeline.SelectionStart = _selected.Clip.Start; Timeline.SelectionEnd = _selected.Clip.End;
-        Timeline.Moments = _selected.Session.Moments.Select(m => (m.RecordingTime - _selected.Clip.RecordingOrigin, m.Kind)).ToArray();
+        Timeline.Moments = _selected.Session.Moments.Select(m => (Time: PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime), m.Kind)).Where(m => m.Time.HasValue).Select(m => (m.Time!.Value, m.Kind)).ToArray();
         _updating = true; Seek.Maximum = _duration; _updating = false; UpdateRange();
         PlayerPoster.Source = _selected.Thumbnail; PlayerPoster.Visibility = Visibility.Visible; RefreshStatus();
     }

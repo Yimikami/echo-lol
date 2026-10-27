@@ -4,9 +4,9 @@ Echo's interface is a local highlight studio. The earlier mint list/player dashb
 
 ## Visual system
 
-- Canvas `#111214`, surfaces `#1A1C20`, raised controls `#24272D`, rules `#30333B`.
-- Text `#F5F6F7`, secondary `#A1A7B2`, ice-blue selection `#C2D4FF`.
-- Bundled Manrope at 400/600/700, with 30px page titles, 17–18px section headings, 14px body and 11–12px metadata. Original variable font and OFL notice are retained; static instances avoid platform-dependent variable-font handling.
+- Canvas `#151922`, surfaces `#202733`, raised controls `#2A3444`, rules `#465269`.
+- Text `#F6F8FC`, secondary `#BDC7D7`, ice-blue selection `#A9C9FF`. Secondary copy uses the shared brush rather than independently dimmed colors.
+- Bundled Manrope at 400/500/600/700, with 30px page titles, 17–18px section headings, 14px medium-weight body and 12px metadata. Original variable font and OFL notice are retained; static instances avoid platform-dependent variable-font handling.
 - One regular-weight Phosphor icon family. Exact upstream SVG paths are converted into native WPF geometries; there is no raster icon atlas, emoji icon or per-frame SVG decoder.
 - Custom shared button, input, switch and slider styles with explicit hover/focus/disabled states. WPF UI supplies native themed dropdowns and related framework resources; its icon family is no longer used by Echo's interface.
 
@@ -18,7 +18,7 @@ A page holds at most 32 items. Metadata is separate from thumbnails: images deco
 
 ## Editor
 
-Opening a clip switches to a dedicated editing workspace; Back / Escape returns to the gallery. A large player occupies the center. The 250px inspector holds trim in/out, selection duration and MP4 export. The timeline owns the full bottom width rather than sitting inside a small card. It draws bounded real video frames with preserved aspect ratio, a time ruler, direct trim edges, playhead and labeled event markers. The inspector can scroll at the minimum height while keeping Export accessible.
+Opening a clip switches to a large player with a seek bar; Back / Escape returns to the gallery. Editing controls stay hidden until **Trim** is selected. Then the 250px inspector holds trim in/out, selection duration and MP4 export. The timeline owns the full bottom width and draws bounded real video frames with preserved aspect ratio, a time ruler, direct trim edges, playhead and Phosphor event icons. The inspector can scroll at the minimum height while keeping Export accessible. Kill, death and assist counts use sword, skull and handshake icons consistently across the library and timeline.
 
 Space plays/pauses, F or double-click opens fullscreen, Esc exits fullscreen, M mutes, arrows seek, and I/O set the trim range. Event previews start three seconds before the action, clamped to available footage. Fullscreen keeps the same media element and hides navigation, inspector and timeline. Playback audio is independent of recording-source settings.
 
@@ -26,7 +26,7 @@ Selected poster images are generated at up to 1280px. Poster and filmstrip work 
 
 ## Settings and feedback
 
-Recording, Audio, Highlights and Storage have dedicated categories. Rows align labels and controls; audio rows have explicit toggles. Fields retain an unsaved draft while moving between app destinations; Save changes writes only validated settings to the profile. Errors remain visible in the save footer. Icon controls have automation names; trim has time-field alternatives and keyboard controls. Deletion has a focus-cycling confirmation and keeps the existing Recycle Bin/shared-source protections. Manual saves and deletions show visible, dismissible notifications even when the gallery is open.
+Recording, Audio, Highlights and Storage have dedicated categories. Rows align labels and controls; audio rows have explicit toggles. Selections save immediately, numeric edits save after a 450ms pause, and typed folder paths save on leaving the field. Folder-picker selections save immediately. Invalid edits stay visible without replacing valid settings. There is no Save changes button. The footer distinguishes saved settings from changes that apply next recording. Highlights settings include a configurable global manual shortcut and optional removal of focus-masked intervals from new highlights. Icon controls have automation names; trim has time-field alternatives and keyboard controls. Deletion has a focus-cycling confirmation and keeps the existing Recycle Bin/shared-source protections. Manual saves and deletions show visible, dismissible notifications even when the gallery is open. Redundant studio slogans and storage footnotes were removed.
 
 ## Research inspected
 
@@ -41,6 +41,6 @@ These informed layout and interaction; reference-product branding, media and pro
 
 ## Verification
 
-Native offscreen WPF renders covered gallery, editor and all four settings categories at 1480×920 and 1100×720. Thirty-four checks passed, including embedded font/icon resolution, gallery/editor navigation, volume/mute, visible slider-track geometry, fullscreen layout restoration, three-second event lead-in, confirmation cancellation, settings validation/persistence, bounded pagination and search reset. The final packaged build passed the 20-check behavior subset and all 37 core tests.
+Native offscreen WPF renders covered gallery, normal player, optional trim editor and all four settings categories at 1480×920 and 1100×720. Forty-two checks passed, including embedded font/icon resolution, optional trimming, volume/mute, fullscreen restoration, event lead-in, confirmation cancellation, immediate audio/mode persistence, shortcut settings, active-match visibility, bounded pagination and search reset. Core tests: 53 passed. Global shortcut registration, conflict handling and release also passed a native Windows check.
 
 These are actual application visual-tree renders and handler tests, not a claim of live gameplay FPS, Windows taskbar/fullscreen acceptance, full assist acceptance or native crash elimination. Private clip previews remain local. The public settings image is labeled as a render from the native UI.

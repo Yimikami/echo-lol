@@ -8,23 +8,24 @@
         <ResourceDictionary Source="Assets/Phosphor.xaml"/>
       </ResourceDictionary.MergedDictionaries>
       <FontFamily x:Key="StudioFont">pack://application:,,,/Echo;component/Assets/Fonts/#Manrope</FontFamily>
-      <SolidColorBrush x:Key="BackgroundBrush" Color="#111214"/>
-      <SolidColorBrush x:Key="PanelBrush" Color="#1A1C20"/>
-      <SolidColorBrush x:Key="RaisedBrush" Color="#24272D"/>
-      <SolidColorBrush x:Key="LineBrush" Color="#30333B"/>
-      <SolidColorBrush x:Key="TextBrush" Color="#F5F6F7"/>
-      <SolidColorBrush x:Key="SecondaryBrush" Color="#A1A7B2"/>
-      <SolidColorBrush x:Key="AccentBrush" Color="#C2D4FF"/>
+      <SolidColorBrush x:Key="BackgroundBrush" Color="#151922"/>
+      <SolidColorBrush x:Key="PanelBrush" Color="#202733"/>
+      <SolidColorBrush x:Key="RaisedBrush" Color="#2A3444"/>
+      <SolidColorBrush x:Key="LineBrush" Color="#465269"/>
+      <SolidColorBrush x:Key="TextBrush" Color="#F6F8FC"/>
+      <SolidColorBrush x:Key="SecondaryBrush" Color="#BDC7D7"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="#A9C9FF"/>
       <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="14"/>
       </Style>
       <Style TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        <Setter Property="Background" Value="#24272D"/>
+        <Setter Property="Background" Value="#2A3444"/>
         <Setter Property="BorderBrush" Value="#383C45"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="15,10"/>
@@ -85,6 +86,7 @@
       </Style>
       <Style TargetType="TextBox">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="Background" Value="#202228"/>
         <Setter Property="BorderBrush" Value="#3A3E48"/>
@@ -114,6 +116,7 @@
       </Style>
       <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="MinHeight" Value="40"/>
@@ -121,6 +124,7 @@
       </Style>
       <Style TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -133,7 +137,7 @@
           <Setter.Value>
             <ControlTemplate TargetType="CheckBox">
               <Border x:Name="Track" Background="#454A56" CornerRadius="12" BorderThickness="1" BorderBrush="Transparent">
-                <Ellipse x:Name="Knob" Fill="#F5F6F7" Width="16" Height="16" Margin="3" HorizontalAlignment="Left"/>
+                <Ellipse x:Name="Knob" Fill="#F6F8FC" Width="16" Height="16" Margin="3" HorizontalAlignment="Left"/>
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsChecked" Value="True">
@@ -214,6 +218,7 @@
       </Style>
       <Style TargetType="ToolTip">
         <Setter Property="FontFamily" Value="{StaticResource StudioFont}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Background" Value="#2A2D34"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
