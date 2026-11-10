@@ -7,7 +7,7 @@
 [Setup]
 AppId={{8F87EF57-DBE7-4A6E-9A68-385B5A770C6D}
 AppName=Echo
-AppVersion={#EchoVersion}
+AppVersion={#emit EchoVersion}
 AppPublisher=Echo contributors
 AppPublisherURL=https://github.com/Yimikami/echo-lol
 AppSupportURL=https://github.com/Yimikami/echo-lol/issues
@@ -21,7 +21,7 @@ ArchitecturesInstallIn64BitMode=x64os
 MinVersion=10.0.19041
 SetupIconFile=..\assets\brand\echo.ico
 UninstallDisplayIcon={app}\Echo.exe
-OutputBaseFilename=Echo-Setup-{#EchoVersion}-x64
+OutputBaseFilename=Echo-Setup-{#emit EchoVersion}-x64
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
@@ -33,7 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
-Source: "{#PackageDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#emit PackageDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Echo"; Filename: "{app}\Echo.exe"; WorkingDir: "{app}"
