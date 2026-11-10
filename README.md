@@ -1,27 +1,42 @@
-<p align="center"><img src="assets/brand/echo-emblem.png" width="88" alt="Echo" /></p>
+<p align="center">
+  <img src="assets/brand/echo-emblem.png" width="84" alt="Echo logo" />
+</p>
 
-# Echo
+<h1 align="center">Echo</h1>
 
-A lightweight League of Legends recorder for Windows. Keep your plays, edit them, and share them.
+<p align="center">Automatic highlights and full-match recording for League of Legends on Windows.</p>
 
-![Echo clip library](docs/images/library.png)
+<p align="center">
+  <strong><a href="https://github.com/Yimikami/echo-lol/releases/latest">Download for Windows</a></strong>
+  · <a href="https://github.com/Yimikami/echo-lol/issues">Report an issue</a>
+</p>
 
-- Automatically capture League kills, assists, deaths, multikills and objectives, or save the entire match.
-- Review event markers and APM, bookmark plays, and export a recap from a recorded match.
-- Select clips in bulk, organize them with favorites and tags, and restore items from Trash.
-- Export original, square or vertical MP4s with optional League HUD and keyboard/mouse overlays.
-- Capture game audio by default. Desktop audio, microphone and separate tracks are optional.
-- Import or relink MP4s, back up the library, and set an optional storage limit.
+![Echo Library with a featured champion, highlight cards, event markers, and recent captures](docs/images/library.png)
 
-## Download
+## Get started
 
-[Download Echo for Windows](https://github.com/Yimikami/echo-lol/releases/latest). Run **Echo-Setup** or extract the portable ZIP and run **Echo.exe**.
+1. Download **Echo-Setup** from the latest release, or extract the portable ZIP and run **Echo.exe**. Both include .NET, the OBS runtime and FFmpeg.
+2. Choose **Highlights only** or **Entire match** during setup. Echo starts recording when you enter a League match and keeps running in the system tray when you close the library.
+3. Find your recordings in **Library** or **Matches**. Press **Ctrl+Shift+F8** in-game to save a moment manually, or change the shortcut in Settings.
 
-[Development builds](https://github.com/Yimikami/echo-lol/releases/tag/development) are also available.
+Echo runs on Windows 10/11 x64 and uses a hardware H.264 encoder. Recordings are saved locally. Game audio is captured by default, with desktop audio and microphone available separately.
 
-## Build and run
+## Capture, review, share
 
-Requires Windows 10/11 x64, .NET 10 SDK, a hardware H.264 encoder, OBS Studio 33 runtime files and FFmpeg on PATH. Running a built copy requires the .NET 10 Desktop Runtime. OBS itself does not need to be running.
+- **Capture the moments you want.** Automatically save kills, assists, deaths, multikills and objectives. Set how much video to keep before and after each event.
+- **Review the whole match.** Jump to event markers, bookmark plays and build a recap. Enable **Record gameplay inputs** under **Settings → Highlights** before a match to add an APM graph and a customizable keyboard and mouse overlay.
+- **Export and organize.** Trim and export original, square or vertical MP4s, with optional HUD and input overlays. Use bulk selection, favorites and tags to manage your library.
+
+![Echo player with gameplay, an APM timeline, and a list of match events](docs/images/player.png)
+
+*Screenshots show the Echo interface with demo recordings and [Riot Games gameplay footage](https://www.leagueoflegends.com/en-us/how-to-play/).*
+
+## Build from source
+
+<details>
+<summary>Build instructions</summary>
+
+Requires the .NET 10 SDK, the OBS Studio 33 runtime, and FFmpeg on PATH. The local build below also uses the .NET 10 Desktop Runtime.
 
 ```powershell
 git clone https://github.com/Yimikami/echo-lol.git
@@ -30,16 +45,12 @@ pwsh ./scripts/build.ps1 -BundleRuntime -ObsDirectory "C:\Program Files\obs-stud
 ./artifacts/app/Echo.exe
 ```
 
-Open Echo and play League. Recording starts automatically; closing the library keeps the recorder running. Choose **Export** while watching a clip or **Select** to export several at once. Enable **Record gameplay inputs** in Highlights before a match to capture APM and the input overlay. Use **Custom keys** in Overlay settings to choose what appears in playback and exports. Use **Ctrl+Shift+F8** to save a moment manually or change the shortcut in Settings.
+[Capture and build architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Development builds](https://github.com/Yimikami/echo-lol/releases/tag/development)
 
-Fullscreen monitor capture can include everything visible on the game's monitor while League has focus. Window capture isolates the game window. See [capture details](docs/architecture.md).
-
-## Development
-
-Early development. Windows packages are published automatically from main; version tags create versioned releases. Hardware encoding reduces overhead, but zero FPS impact is not guaranteed. See [validation](docs/validation.md), [build architecture](docs/architecture.md) and [contributing](https://github.com/Yimikami/echo-lol/issues).
+</details>
 
 ## License
 
-GPL-3.0-or-later. Built with libobs, FFmpeg, WPF UI, Phosphor Icons and Manrope. [Third-party notices](THIRD_PARTY_NOTICES.md).
+[GPL-3.0-or-later](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Echo isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
