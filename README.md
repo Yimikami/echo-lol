@@ -6,13 +6,12 @@ A lightweight League of Legends recorder for Windows. Keep your plays, edit them
 
 ![Echo clip library](docs/images/library.png)
 
-- Automatically capture kills, assists and deaths, or record the entire match.
-- Game audio by default; desktop audio and microphone are optional.
-- Browse, watch, trim and delete recordings.
-- Navigate matches with event markers and an APM activity timeline.
-- Export clips with your saved keyboard/mouse and APM overlay.
-- Choose which keys appear, and position the overlay on a preview from your own recordings.
-- Save a manual moment with a configurable shortcut; default: **Ctrl+Shift+F8**.
+- Automatically capture League kills, assists, deaths, multikills and objectives, or save the entire match.
+- Review event markers and APM, bookmark plays, and export a recap from a recorded match.
+- Select clips in bulk, organize them with favorites and tags, and restore items from Trash.
+- Export original, square or vertical MP4s with optional League HUD and keyboard/mouse overlays.
+- Capture game audio by default. Desktop audio, microphone and separate tracks are optional.
+- Import or relink MP4s, back up the library, and set an optional storage limit.
 
 ## Download
 
@@ -29,7 +28,7 @@ pwsh ./scripts/build.ps1 -BundleRuntime -ObsDirectory "C:\Program Files\obs-stud
 ./artifacts/app/Echo.exe
 ```
 
-Open Echo and play League. Recording starts automatically; closing the library keeps the recorder running. Choose **Export** while watching a clip to save it with the overlay. Enable **Record gameplay inputs** in Highlights before a match to use input overlays; old videos cannot reconstruct inputs.
+Open Echo and play League. Recording starts automatically; closing the library keeps the recorder running. Choose **Export** while watching a clip or **Select** to export several at once. Enable **Record gameplay inputs** in Highlights before a match to capture APM and the input overlay. Use **Ctrl+Shift+F8** to save a moment manually or change the shortcut in Settings.
 
 Fullscreen monitor capture can include everything visible on the game's monitor while League has focus. Window capture isolates the game window. See [capture details](docs/architecture.md).
 
