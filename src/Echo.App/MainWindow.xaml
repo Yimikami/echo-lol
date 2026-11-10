@@ -3,21 +3,21 @@
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"/>
   </shell:WindowChrome.WindowChrome>
-  <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="#353841" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
+  <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Grid x:Name="ShellRoot">
       <Grid.RowDefinitions>
-        <RowDefinition Height="52"/>
+        <RowDefinition Height="58"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="76"/>
+        <ColumnDefinition Width="70"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
-      <Border x:Name="TitleBar" Grid.ColumnSpan="2" Background="{DynamicResource SidebarBrush}" BorderBrush="#2B2E35" BorderThickness="0,0,0,1" MouseLeftButtonDown="DragHeader">
+      <Border x:Name="TitleBar" Grid.ColumnSpan="2" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" MouseLeftButtonDown="DragHeader">
         <Grid Margin="20,0,9,0">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="155"/>
+            <ColumnDefinition Width="148"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="Auto"/>
@@ -26,10 +26,10 @@
             <Image Source="Assets/echo-emblem.png" Width="25" Height="25"/>
             <TextBlock Text="Echo" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0"/>
           </StackPanel>
-          <Border Grid.Column="2" Background="#22262E" CornerRadius="14" Padding="12,6" VerticalAlignment="Center" Margin="0,0,20,0">
+          <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="15" Padding="12,6" VerticalAlignment="Center" Margin="0,0,20,0">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="StatusDot" Width="6" Height="6" Fill="#C2D4FF" Margin="0,0,8,0"/>
-              <TextBlock x:Name="HeaderStatus" Text="Connecting to capture" FontSize="12" Foreground="#D7DEEF"/>
+              <Ellipse x:Name="StatusDot" Width="6" Height="6" Fill="{DynamicResource SecondaryBrush}" Margin="0,0,8,0"/>
+              <TextBlock x:Name="HeaderStatus" Text="Connecting to capture" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
             </StackPanel>
           </Border>
           <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
@@ -56,65 +56,55 @@
           </Style>
         </TextBlock.Style>
       </TextBlock>
-      <Border x:Name="Sidebar" Grid.Row="2" Background="{DynamicResource SidebarBrush}" BorderBrush="#2B2E35" BorderThickness="0,0,1,0">
-        <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-          </Grid.RowDefinitions>
-          <StackPanel Margin="0,19,0,0">
-            <Button x:Name="LibraryNav" Style="{StaticResource RailButton}" Click="LibraryClick" AutomationProperties.Name="Library">
-              <StackPanel>
-                <local:PhosphorIcon Kind="Library" Width="23" Height="23" HorizontalAlignment="Center"/>
-                <TextBlock Text="Library" FontSize="12" Margin="0,7,0,0" HorizontalAlignment="Center"/>
-              </StackPanel>
-            </Button>
-            <Button x:Name="MatchesNav" Style="{StaticResource RailButton}" Click="MatchesClick" AutomationProperties.Name="Matches">
-              <StackPanel>
-                <local:PhosphorIcon Kind="Matches" Width="23" Height="23" HorizontalAlignment="Center"/>
-                <TextBlock Text="Matches" FontSize="12" Margin="0,7,0,0" HorizontalAlignment="Center"/>
-              </StackPanel>
-            </Button>
-            <Button x:Name="SettingsNav" Style="{StaticResource RailButton}" Click="SettingsClick" AutomationProperties.Name="Settings">
-              <StackPanel>
-                <local:PhosphorIcon Kind="Settings" Width="23" Height="23" HorizontalAlignment="Center"/>
-                <TextBlock Text="Settings" FontSize="12" Margin="0,7,0,0" HorizontalAlignment="Center"/>
-              </StackPanel>
-            </Button>
+      <Border x:Name="Sidebar" Grid.Row="2" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Margin="0,15,0,0">
+            <Button x:Name="LibraryNav" Style="{StaticResource RailButton}" Click="LibraryClick" ToolTip="Library" AutomationProperties.Name="Library"><local:PhosphorIcon Kind="Library" Width="22" Height="22"/></Button>
+            <Button x:Name="MatchesNav" Style="{StaticResource RailButton}" Click="MatchesClick" ToolTip="Matches" AutomationProperties.Name="Matches"><local:PhosphorIcon Kind="Matches" Width="22" Height="22"/></Button>
+            <Button x:Name="FavoritesNav" Style="{StaticResource RailButton}" Click="FavoritesClick" ToolTip="Favorites" AutomationProperties.Name="Favorites"><local:PhosphorIcon Kind="Bookmark" Width="22" Height="22"/></Button>
           </StackPanel>
-          <StackPanel Grid.Row="2" Margin="0,0,0,19">
-            <Button Style="{StaticResource RailButton}" Click="SaveMomentClick" ToolTip="Save a manual moment during the match" AutomationProperties.Name="Save moment">
-              <local:PhosphorIcon Kind="Bookmark" Width="22" Height="22"/>
+          <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,11">
+            <Button Style="{StaticResource RailButton}" Click="SaveMomentClick" ToolTip="Save a manual moment" AutomationProperties.Name="Save moment"><local:PhosphorIcon Kind="Clock" Width="19" Height="19"/></Button>
+            <Button x:Name="SettingsNav" Style="{StaticResource RailButton}" Click="SettingsClick" ToolTip="Settings" AutomationProperties.Name="Settings"><local:PhosphorIcon Kind="Settings" Width="22" Height="22"/></Button>
+            <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Margin="12,9"/>
+            <Button x:Name="CaptureButton" Style="{StaticResource RailButton}" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" Click="CaptureClick" AutomationProperties.Name="Automatic capture controls">
+              <local:PhosphorIcon x:Name="CaptureGlyph" Kind="Recording" Width="20" Height="20" Foreground="{DynamicResource AccentBrush}"/>
             </Button>
-            <Border BorderBrush="#30333B" BorderThickness="0,1,0,0" Margin="17,10,17,13"/>
-            <Button x:Name="CaptureButton" Style="{StaticResource RailButton}" Click="CaptureClick" ToolTip="Automatic capture is on. Click to pause." AutomationProperties.Name="Automatic capture controls">
-              <StackPanel>
-                <local:PhosphorIcon x:Name="CaptureGlyph" Kind="Recording" Width="22" Height="22" Foreground="#C2D4FF" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="RecorderLabel" Text="Auto on" FontSize="11" HorizontalAlignment="Center" Margin="0,7,0,0"/>
-              </StackPanel>
-            </Button>
+            <TextBlock x:Name="RecorderLabel" Text="Auto" FontSize="10" HorizontalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}" Margin="0,3,0,0"/>
           </StackPanel>
-        </Grid>
+          <Grid/>
+        </DockPanel>
       </Border>
-      <Grid x:Name="LibraryPanel" Grid.Row="2" Grid.Column="1" Margin="32,28,32,16">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="*"/>
-          <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <Grid x:Name="LibraryHeading">
+      <Grid x:Name="LibraryPanel" Grid.Row="2" Grid.Column="1" Margin="23,14,19,10">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="LibraryGutter" Width="0"/><ColumnDefinition x:Name="LibraryAsideColumn" Width="0"/></Grid.ColumnDefinitions>
+        <Border Grid.RowSpan="2" Grid.ColumnSpan="3" Height="365" VerticalAlignment="Top" Margin="-23,-14,-19,0"
+                IsHitTestVisible="False" Opacity=".34" Visibility="{Binding Visibility,ElementName=FeaturedPanel}">
+          <Border.Background>
+            <ImageBrush ImageSource="{Binding DataContext.Thumbnail,ElementName=FeaturedPanel}" Stretch="UniformToFill"/>
+          </Border.Background>
+          <Border.OpacityMask>
+            <LinearGradientBrush StartPoint=".5,0" EndPoint=".5,1">
+              <GradientStop Color="#23FFFFFF" Offset="0"/>
+              <GradientStop Color="#C5FFFFFF" Offset=".26"/>
+              <GradientStop Color="#6AFFFFFF" Offset=".61"/>
+              <GradientStop Color="Transparent" Offset="1"/>
+            </LinearGradientBrush>
+          </Border.OpacityMask>
+        </Border>
+        <Grid x:Name="LibraryHeading" Grid.ColumnSpan="3" Margin="0,0,0,15">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
-          <StackPanel>
-            <TextBlock x:Name="PageTitle" Text="Library" FontSize="30" FontWeight="Bold"/>
-            <TextBlock x:Name="LibraryCount" Text="Your best moments, saved automatically." Style="{StaticResource Hint}" Margin="0,7,0,0"/>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock x:Name="PageTitle" Text="Library" FontSize="31" FontWeight="Bold"/>
+            <Border Background="{DynamicResource RaisedBrush}" CornerRadius="12" Padding="9,3" Margin="11,4,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="LibraryCount" Text="0 clips" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+            </Border>
           </StackPanel>
-          <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="#333740" BorderThickness="1" CornerRadius="8" Height="40" VerticalAlignment="Center">
+          <Border Grid.Column="1" Width="260" Margin="14,0,8,0" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Height="40" VerticalAlignment="Center">
             <DockPanel Margin="11,0">
               <local:PhosphorIcon Kind="Search" Width="17" Height="17" Foreground="{DynamicResource SecondaryBrush}" DockPanel.Dock="Left" Margin="0,0,8,0"/>
               <Grid>
@@ -134,14 +124,74 @@
               </Grid>
             </DockPanel>
           </Border>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button x:Name="SelectModeButton" Content="Select" Click="SelectModeClick" Style="{StaticResource QuietButton}" Margin="0,0,8,0" Height="40" Padding="13,7"/>
+            <Button x:Name="LibraryMenuButton" Click="LibraryMenuClick" Height="40" Padding="13,7" AutomationProperties.Name="Library tools">
+              <StackPanel Orientation="Horizontal">
+                <local:PhosphorIcon Kind="Folder" Width="16" Height="16"/>
+                <TextBlock Text="Tools" Margin="7,0,0,0"/>
+                <local:PhosphorIcon Kind="ChevronDown" Width="13" Height="13" Margin="6,0,0,0"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
         </Grid>
-        <Grid Grid.Row="1" Margin="0,25,0,22">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel x:Name="MomentFilters" Orientation="Horizontal">
-            <Button x:Name="FilterAll" Content="All moments" Tag="All" Click="FilterClick" Padding="14,8" Margin="0,0,8,0"/>
+        <ScrollViewer x:Name="LibraryScroll" Grid.Row="1" SizeChanged="LibraryViewportChanged" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,7,0">
+          <StackPanel Margin="0,0,8,0">
+            <Grid x:Name="FeaturedPanel" Height="224" Margin="0,2,0,17" Visibility="Collapsed">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="134"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/><ColumnDefinition Width="192"/>
+              </Grid.ColumnDefinitions>
+              <Border CornerRadius="10" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Margin="0,8,0,14" Background="{DynamicResource PanelBrush}">
+                <Border CornerRadius="9">
+                  <Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background>
+                  <Border CornerRadius="9" VerticalAlignment="Bottom" Padding="9,8" Background="#D20B0D12">
+                    <TextBlock Text="{Binding DurationLabel}" FontSize="13" FontWeight="Bold" Foreground="#F8F8FA"/>
+                  </Border>
+                </Border>
+              </Border>
+              <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,0,7">
+                <Border HorizontalAlignment="Left" Background="{DynamicResource NavigationActiveBrush}" Padding="9,4" CornerRadius="5">
+                  <TextBlock x:Name="FeaturedLabel" Text="LATEST HIGHLIGHT" Foreground="{DynamicResource NavigationTextBrush}" FontSize="10" FontWeight="Bold"/>
+                </Border>
+                <TextBlock x:Name="FeaturedTitle" Text="{Binding Title}" FontSize="40" FontWeight="Bold" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource SecondaryBrush}" TextTrimming="CharacterEllipsis" FontSize="13" Margin="1,2,0,5"/>
+                <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" Margin="1,0,0,12"/>
+                <Button x:Name="FeaturedPlay" Click="FeaturedClick" HorizontalAlignment="Left" Padding="12,6" MinHeight="37" Style="{StaticResource AccentButton}" AutomationProperties.Name="Play latest recording">
+                  <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Play" Width="16" Height="16"/><TextBlock x:Name="FeaturedPlayLabel" Text="Play clip" FontWeight="Bold" Margin="8,0,0,0"/></StackPanel>
+                </Button>
+              </StackPanel>
+              <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,0,8,7">
+                <DockPanel>
+                  <local:PhosphorIcon Kind="Clock" Width="15" Height="15" Margin="0,0,7,0" Foreground="{DynamicResource ActivityBrush}"/>
+                  <TextBlock Text="Recording events" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource SecondaryBrush}"/>
+                </DockPanel>
+                <TextBlock Text="{Binding EventCount}" FontSize="35" FontWeight="Bold" Margin="0,0,0,6"/>
+                <local:EventStrip Height="7" Points="{Binding EventPoints}" Margin="0,0,0,10"/>
+                <UniformGrid Rows="1">
+                  <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Kill" Width="15" Height="15" Foreground="{DynamicResource KillBrush}"/><TextBlock Text="{Binding KillCount}" FontSize="12" Margin="4,0,0,0"/></StackPanel>
+                  <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Assist" Width="15" Height="15" Foreground="{DynamicResource AssistBrush}"/><TextBlock Text="{Binding AssistCount}" FontSize="12" Margin="4,0,0,0"/></StackPanel>
+                  <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Death" Width="15" Height="15" Foreground="{DynamicResource DeathBrush}"/><TextBlock Text="{Binding DeathCount}" FontSize="12" Margin="4,0,0,0"/></StackPanel>
+                </UniformGrid>
+              </StackPanel>
+            </Grid>
+            <DockPanel LastChildFill="True">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+            <ComboBox x:Name="LibraryView" Width="120" SelectedIndex="0" SelectionChanged="LibraryViewChanged" Margin="0,0,8,0" AutomationProperties.Name="Library view">
+              <ComboBoxItem Content="All items"/>
+              <ComboBoxItem Content="Favorites"/>
+              <ComboBoxItem Content="Trash"/>
+              <ComboBoxItem Content="Missing files"/>
+            </ComboBox>
+            <ComboBox x:Name="SortBox" Width="136" SelectedIndex="0" SelectionChanged="SortChanged" AutomationProperties.Name="Sort clips">
+            <ComboBoxItem Content="Newest first"/>
+              <ComboBoxItem Content="Oldest first"/>
+            </ComboBox>
+          </StackPanel>
+              <TextBlock x:Name="GalleryTitle" Text="All clips" FontSize="21" FontWeight="Bold" VerticalAlignment="Center"/>
+            </DockPanel>
+          <StackPanel x:Name="MomentFilters" Orientation="Horizontal" Margin="0,8,0,12">
+            <Button x:Name="FilterAll" Content="All" Tag="All" Click="FilterClick" Padding="14,8" Margin="0,0,8,0"/>
             <Button x:Name="FilterKills" Tag="Kill" Click="FilterClick" Padding="15,8" Margin="0,0,8,0">
               <StackPanel Orientation="Horizontal">
                 <local:PhosphorIcon Kind="Kill" Width="16" Height="16"/>
@@ -162,23 +212,8 @@
             </Button>
             <Button x:Name="MoreEventsButton" Content="Events" Click="MoreEventsClick" Padding="10,8" Margin="8,0,0,0"/>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal">
-            <ComboBox x:Name="LibraryView" Width="120" SelectedIndex="0" SelectionChanged="LibraryViewChanged" Margin="0,0,8,0" AutomationProperties.Name="Library view">
-              <ComboBoxItem Content="All items"/>
-              <ComboBoxItem Content="Favorites"/>
-              <ComboBoxItem Content="Trash"/>
-              <ComboBoxItem Content="Missing files"/>
-            </ComboBox>
-            <Button x:Name="SelectModeButton" Content="Select" Click="SelectModeClick" Margin="0,0,8,0"/>
-            <Button x:Name="LibraryMenuButton" Content="Library tools" Click="LibraryMenuClick" Margin="0,0,8,0"/>
-            <ComboBox x:Name="SortBox" Width="136" SelectedIndex="0" SelectionChanged="SortChanged" AutomationProperties.Name="Sort clips">
-            <ComboBoxItem Content="Newest first"/>
-              <ComboBoxItem Content="Oldest first"/>
-            </ComboBox>
-          </StackPanel>
-        </Grid>
-        <Grid Grid.Row="2" x:Name="ClipBrowser">
-          <ListBox x:Name="ClipList" PreviewMouseLeftButtonDown="GalleryMouseDown" SelectionChanged="ClipSelected" SizeChanged="GalleryWidthChanged" Background="Transparent" Foreground="{DynamicResource TextBrush}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="Clip gallery">
+        <Grid x:Name="ClipBrowser">
+          <ListBox x:Name="ClipList" PreviewMouseLeftButtonDown="GalleryMouseDown" SelectionChanged="ClipSelected" SizeChanged="GalleryWidthChanged" Background="Transparent" Foreground="{DynamicResource TextBrush}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="Clip gallery">
             <ListBox.Resources>
               <sys:Double x:Key="GalleryTileWidth">300</sys:Double>
               <sys:Double x:Key="GalleryThumbnailHeight">168</sys:Double>
@@ -191,28 +226,26 @@
             <ListBox.ItemContainerStyle>
               <Style TargetType="ListBoxItem">
                 <Setter Property="Width" Value="{DynamicResource GalleryTileWidth}"/>
-                <Setter Property="Margin" Value="0,0,16,22"/>
+                <Setter Property="Margin" Value="0,0,14,14"/>
                 <Setter Property="Padding" Value="0"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                 <Setter Property="Template">
                   <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                      <Border x:Name="Card" Background="Transparent" CornerRadius="9" Padding="5" BorderBrush="Transparent" BorderThickness="1">
+                      <Border x:Name="Card" Background="{DynamicResource PanelBrush}" CornerRadius="8" Padding="0,0,0,11" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1">
                         <ContentPresenter/>
                       </Border>
                       <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                          <Setter TargetName="Card" Property="Background" Value="#1E2127"/>
-                          <Setter TargetName="Card" Property="BorderBrush" Value="#4B5569"/>
+                          <Setter TargetName="Card" Property="Background" Value="{DynamicResource RaisedBrush}"/>
+                          <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource SecondaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                          <Setter TargetName="Card" Property="Background" Value="{DynamicResource PanelBrush}"/>
                           <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                          <Setter TargetName="Card" Property="BorderThickness" Value="2"/>
-                          <Setter TargetName="Card" Property="Padding" Value="4"/>
+                          <Setter TargetName="Card" Property="Background" Value="{DynamicResource AccentSurfaceBrush}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                          <Setter TargetName="Card" Property="BorderBrush" Value="#C2D4FF"/>
+                          <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                       </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -222,21 +255,39 @@
             </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <StackPanel>
+                <Grid>
+                <StackPanel x:Name="HighlightTile">
                   <Grid Height="{DynamicResource GalleryThumbnailHeight}">
-                    <Border Background="#22252B" CornerRadius="7">
-                      <local:PhosphorIcon Kind="Matches" Width="32" Height="32" Foreground="#5B6475" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border Background="{DynamicResource RaisedBrush}" CornerRadius="7,7,0,0">
+                      <local:PhosphorIcon Kind="Matches" Width="32" Height="32" Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
-                    <Border CornerRadius="7">
+                    <Border CornerRadius="7,7,0,0">
                       <Border.Background>
                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/>
                       </Border.Background>
+                    </Border>
+                    <Border Width="42" Height="42" CornerRadius="21" Background="#D91A211C" BorderBrush="#91C5F65B" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                      <Border.Style>
+                        <Style TargetType="Border">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsMouseOver,RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"/>
+                                <Condition Binding="{Binding IsReady}" Value="True"/>
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <local:PhosphorIcon Kind="Play" Width="17" Height="17" Foreground="#C5F65B" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#E20B0D11" CornerRadius="4" Padding="7,4" Margin="9">
                       <TextBlock Text="{Binding DurationLabel}" FontSize="12" Foreground="White"/>
                     </Border>
                     <Border HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E20B0D11" CornerRadius="4" Padding="6" Margin="9" Visibility="{Binding FavoriteVisibility}">
-                      <local:PhosphorIcon Kind="Bookmark" Width="15" Height="15" Foreground="#FFDA91"/>
+                      <local:PhosphorIcon Kind="Bookmark" Width="15" Height="15" Foreground="#E2C3FF"/>
                     </Border>
                     <Border Background="{DynamicResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="9" Padding="6" CornerRadius="4">
                       <Border.Style>
@@ -249,50 +300,135 @@
                           </Style.Triggers>
                         </Style>
                       </Border.Style>
-                      <local:PhosphorIcon Kind="Check" Width="15" Height="15" Foreground="#14203C"/>
+                      <local:PhosphorIcon Kind="Check" Width="15" Height="15" Foreground="{DynamicResource AccentTextBrush}"/>
                     </Border>
                     <Border Background="#E3232B38" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9" Padding="7,4" CornerRadius="4" Visibility="{Binding StateVisibility}">
                       <TextBlock Text="{Binding StateLabel}" FontSize="12" Foreground="#F6F8FC"/>
                     </Border>
                   </Grid>
-                  <Grid Margin="2,12,2,0">
+                  <Grid Margin="11,9,11,0">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*"/>
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="15" TextTrimming="CharacterEllipsis"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                       <StackPanel Orientation="Horizontal" Visibility="{Binding KillVisibility}" Margin="9,0,0,0">
-                        <local:PhosphorIcon Kind="Kill" Width="15" Height="15" Foreground="#BAD2FF"/>
-                        <TextBlock Text="{Binding KillCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="#BAD2FF"/>
+                        <local:PhosphorIcon Kind="Kill" Width="15" Height="15" Foreground="{DynamicResource KillBrush}"/>
+                        <TextBlock Text="{Binding KillCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="{DynamicResource KillBrush}"/>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Visibility="{Binding DeathVisibility}" Margin="9,0,0,0">
-                        <local:PhosphorIcon Kind="Death" Width="15" Height="15" Foreground="#FFBBCB"/>
-                        <TextBlock Text="{Binding DeathCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="#FFBBCB"/>
+                        <local:PhosphorIcon Kind="Death" Width="15" Height="15" Foreground="{DynamicResource DeathBrush}"/>
+                        <TextBlock Text="{Binding DeathCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="{DynamicResource DeathBrush}"/>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Visibility="{Binding AssistVisibility}" Margin="9,0,0,0">
-                        <local:PhosphorIcon Kind="Assist" Width="15" Height="15" Foreground="#A3E6D3"/>
-                        <TextBlock Text="{Binding AssistCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="#A3E6D3"/>
+                        <local:PhosphorIcon Kind="Assist" Width="15" Height="15" Foreground="{DynamicResource AssistBrush}"/>
+                        <TextBlock Text="{Binding AssistCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="{DynamicResource AssistBrush}"/>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Visibility="{Binding ManualVisibility}" Margin="9,0,0,0">
-                        <local:PhosphorIcon Kind="Bookmark" Width="15" Height="15" Foreground="#D0D7E4"/>
-                        <TextBlock Text="{Binding ManualCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="#D0D7E4"/>
+                        <local:PhosphorIcon Kind="Bookmark" Width="15" Height="15" Foreground="{DynamicResource SecondaryBrush}"/>
+                        <TextBlock Text="{Binding ManualCount}" FontSize="12" FontWeight="SemiBold" Margin="4,0,0,0" Foreground="{DynamicResource SecondaryBrush}"/>
                       </StackPanel>
                     </StackPanel>
                   </Grid>
-                  <TextBlock Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource SecondaryBrush}" FontSize="12" Margin="2,5,0,0"/>
-                  <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="12" Margin="2,6,0,0"/>
+                  <TextBlock Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource SecondaryBrush}" FontSize="12" Margin="11,3,11,0"/>
+                  <local:EventStrip Height="6" Margin="11,9,11,0" Points="{Binding EventPoints}"/>
+                  <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" Margin="11,6,11,0"/>
                 </StackPanel>
+                <Grid x:Name="MatchTile" Visibility="Collapsed" Margin="11,11,11,1" MinHeight="104">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="102"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Border CornerRadius="8" Background="{DynamicResource RaisedBrush}">
+                    <Border CornerRadius="8">
+                      <Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background>
+                      <Border VerticalAlignment="Bottom" Background="#D4080C12" Padding="7,3" CornerRadius="0,0,8,8">
+                        <TextBlock Text="{Binding DurationLabel}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                      </Border>
+                    </Border>
+                  </Border>
+                  <StackPanel Grid.Column="2">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding StateLabel}" Visibility="{Binding StateVisibility}" Foreground="{DynamicResource ActivityBrush}" FontSize="10" Margin="5,0,0,0"/>
+                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" Margin="0,4,0,8"/>
+                    <UniformGrid Rows="1">
+                      <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Kill" Width="14" Height="14" Foreground="{DynamicResource KillBrush}"/><TextBlock Text="{Binding KillCount}" FontSize="11" Margin="4,0,0,0"/></StackPanel>
+                      <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Assist" Width="14" Height="14" Foreground="{DynamicResource AssistBrush}"/><TextBlock Text="{Binding AssistCount}" FontSize="11" Margin="4,0,0,0"/></StackPanel>
+                      <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Death" Width="14" Height="14" Foreground="{DynamicResource DeathBrush}"/><TextBlock Text="{Binding DeathCount}" FontSize="11" Margin="4,0,0,0"/></StackPanel>
+                    </UniformGrid>
+                    <local:EventStrip Height="6" Margin="0,9,0,0" Points="{Binding EventPoints}"/>
+                  </StackPanel>
+                </Grid>
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding WholeMatch}" Value="True">
+                    <Setter TargetName="HighlightTile" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="MatchTile" Property="Visibility" Value="Visible"/>
+                  </DataTrigger>
+                </DataTemplate.Triggers>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <StackPanel x:Name="EmptyGallery" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="360">
-            <local:PhosphorIcon Kind="Matches" Width="50" Height="50" Foreground="#727E95" HorizontalAlignment="Center"/>
-            <TextBlock Text="Your next play starts here" FontSize="23" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,24,0,10"/>
+          <StackPanel x:Name="EmptyGallery" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="360" MinHeight="230" IsHitTestVisible="False">
+            <local:PhosphorIcon Kind="Matches" Width="50" Height="50" Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Center"/>
+            <TextBlock x:Name="EmptyTitle" Text="No clips yet" FontSize="23" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,24,0,10"/>
             <TextBlock x:Name="EmptyList" Text="Keep Echo running and play League. Your kills, assists and deaths will appear here automatically." Style="{StaticResource Hint}" TextAlignment="Center"/>
           </StackPanel>
         </Grid>
-        <Grid Grid.Row="3" Margin="3,7,8,0" MinHeight="42">
+          </StackPanel>
+        </ScrollViewer>
+        <Border x:Name="LibraryAside" Grid.Row="1" Grid.Column="2" VerticalAlignment="Top" Visibility="Collapsed">
+          <StackPanel>
+            <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="15" Padding="15">
+              <StackPanel>
+                <DockPanel Margin="0,1,0,12">
+                  <local:PhosphorIcon Kind="Library" Width="17" Height="17" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
+                  <TextBlock Text="Library overview" FontSize="15" FontWeight="Bold"/>
+                </DockPanel>
+                <Border Background="{DynamicResource AccentBrush}" CornerRadius="7" Padding="11,8" Margin="0,0,0,7">
+                  <DockPanel>
+                    <TextBlock x:Name="OverviewItems" DockPanel.Dock="Left" Text="0" FontSize="31" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,8,0"/>
+                    <TextBlock x:Name="OverviewItemLabel" Text="Clips" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center"/>
+                  </DockPanel>
+                </Border>
+                <UniformGrid Rows="1">
+                  <Border Background="{DynamicResource RaisedBrush}" CornerRadius="7" Padding="9,7" Margin="0,0,4,0">
+                    <StackPanel><TextBlock x:Name="OverviewSessions" Text="0" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource AssistBrush}"/><TextBlock x:Name="OverviewSessionLabel" Text="Sessions" Style="{StaticResource Hint}"/></StackPanel>
+                  </Border>
+                  <Border Background="{DynamicResource RaisedBrush}" CornerRadius="7" Padding="9,7" Margin="4,0,0,0">
+                    <StackPanel><TextBlock x:Name="OverviewFavorites" Text="0" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource FavoriteBrush}"/><TextBlock Text="Favorites" Style="{StaticResource Hint}"/></StackPanel>
+                  </Border>
+                </UniformGrid>
+              </StackPanel>
+            </Border>
+            <Border x:Name="RecentPanel" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="15" Padding="12" Margin="0,13,0,0">
+              <StackPanel>
+                <TextBlock Text="Recent captures" FontSize="15" FontWeight="Bold" Margin="3,2,0,7"/>
+                <ItemsControl x:Name="RecentItems">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Click="RecentCaptureClick" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Stretch" Padding="4,6" Margin="0,2,0,0"
+                              AutomationProperties.Name="{Binding Title}" ToolTip="{Binding Subtitle}">
+                        <Grid>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="53"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                          <Border Width="49" Height="33" CornerRadius="5" HorizontalAlignment="Left" Background="{DynamicResource RaisedBrush}">
+                            <Border CornerRadius="5"><Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background></Border>
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,6,0">
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="12" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" FontSize="10" Foreground="{DynamicResource SecondaryBrush}" Margin="0,2,0,0"/>
+                          </StackPanel>
+                          <TextBlock Grid.Column="2" Text="{Binding DurationLabel}" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}" FontSize="10"/>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+        <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="0,6,6,0" MinHeight="42">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
@@ -321,7 +457,7 @@
           <RowDefinition Height="*"/>
           <RowDefinition Height="0"/>
         </Grid.RowDefinitions>
-        <Border x:Name="SelectedHeading" BorderBrush="#30333B" BorderThickness="0,0,0,1" Padding="20,0">
+        <Border x:Name="SelectedHeading" Background="{DynamicResource BackgroundBrush}" Padding="17,0,20,0">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="42"/>
@@ -332,14 +468,16 @@
               <local:PhosphorIcon Kind="Back"/>
             </Button>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
-              <TextBlock x:Name="SelectedTitle" Text="Clip editor" FontSize="17" FontWeight="SemiBold"/>
-              <TextBlock x:Name="SelectedDetails" Text="Select a recording" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" Margin="0,4,0,0"/>
+              <TextBlock x:Name="SelectedTitle" Text="Clip" FontSize="27" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="SelectedDetails" Text="Select a recording" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <Button x:Name="QuickInputsButton" Style="{StaticResource QuietButton}" Click="TogglePlaybackInputs" ToolTip="Show or hide keyboard and mouse"><local:PhosphorIcon Kind="Keyboard" Width="20" Height="20"/></Button>
               <Button x:Name="RecapButton" Content="Recap" Style="{StaticResource QuietButton}" Click="RecapClick" Visibility="Collapsed" Margin="0,0,8,0"/>
               <Button x:Name="ReviewMenuButton" Content="More" Style="{StaticResource QuietButton}" Click="ReviewMenuClick" Margin="0,0,8,0"/>
-              <Button x:Name="QuickExportButton" Content="Export" Style="{StaticResource AccentButton}" Click="ExportClick" Margin="0,0,12,0"/>
+              <Button x:Name="QuickExportButton" Style="{StaticResource AccentButton}" Click="ExportClick" Margin="0,0,10,0" AutomationProperties.Name="Export video">
+                <StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Download" Width="17" Height="17"/><TextBlock Text="Export" Margin="7,0,0,0" FontWeight="Bold"/></StackPanel>
+              </Button>
               <Button x:Name="EditTrimButton" Style="{StaticResource QuietButton}" Click="ToggleTrimClick" Margin="0,0,12,0" AutomationProperties.Name="Toggle trimming">
                 <StackPanel Orientation="Horizontal">
                   <local:PhosphorIcon Kind="Scissors" Width="18" Height="18"/>
@@ -359,30 +497,31 @@
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition x:Name="InspectorColumn" Width="0"/>
+            <ColumnDefinition x:Name="ReviewColumn" Width="0"/>
           </Grid.ColumnDefinitions>
           <Grid x:Name="PlayerDock">
             <Grid.RowDefinitions>
               <RowDefinition Height="*"/>
-              <RowDefinition Height="136"/>
+              <RowDefinition Height="148"/>
               <RowDefinition Height="58"/>
             </Grid.RowDefinitions>
-            <Border x:Name="VideoSurface" Background="#08090B" Margin="24,20,24,0" CornerRadius="5" MouseLeftButtonDown="VideoClicked">
+            <Border x:Name="VideoSurface" Background="#080A09" Margin="19,0,9,0" CornerRadius="13" ClipToBounds="True" MouseLeftButtonDown="VideoClicked">
               <Grid>
                 <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform" MediaOpened="MediaOpened" MediaEnded="MediaEnded" MediaFailed="MediaFailed"/>
                 <Image x:Name="PlayerPoster" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False"/>
                 <Canvas x:Name="InputCanvas" ClipToBounds="True" SizeChanged="InputCanvasResized" MouseMove="InputCanvasHover" MouseLeave="InputCanvasLeave">
                   <local:InputOverlay x:Name="PlaybackInputs" Cursor="SizeAll" MouseLeftButtonDown="InputLayerDown" MouseMove="InputLayerMove" MouseLeftButtonUp="InputLayerUp" Visibility="Collapsed"/>
-                  <Border x:Name="InputLayerOutline" BorderBrush="#A9C9FF" BorderThickness="1" CornerRadius="7" IsHitTestVisible="False" Visibility="Collapsed"/>
+                  <Border x:Name="InputLayerOutline" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="7" IsHitTestVisible="False" Visibility="Collapsed"/>
                   <Button x:Name="InputCollapseButton" Width="24" Height="22" MinHeight="20" Padding="0" Content="−" Click="CollapsePlaybackInputs" ToolTip="Collapse or expand overlay" Visibility="Collapsed"/>
-                  <Thumb x:Name="InputResizeGrip" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Width="14" Height="14" Cursor="SizeNWSE" DragStarted="InputResizeStarted" DragDelta="InputResizeDelta" DragCompleted="InputResizeCompleted" Visibility="Collapsed"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="#A9C9FF" BorderBrush="#17243A" BorderThickness="2" CornerRadius="3"/></ControlTemplate></Thumb.Template></Thumb>
+                  <Thumb x:Name="InputResizeGrip" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Width="14" Height="14" Cursor="SizeNWSE" DragStarted="InputResizeStarted" DragDelta="InputResizeDelta" DragCompleted="InputResizeCompleted" Visibility="Collapsed"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentTextBrush}" BorderThickness="2" CornerRadius="3"/></ControlTemplate></Thumb.Template></Thumb>
                 </Canvas>
                 <StackPanel x:Name="EmptyPlayer" VerticalAlignment="Center" HorizontalAlignment="Center">
-                  <local:PhosphorIcon Kind="Play" Width="40" Height="40" Foreground="#7182A2" HorizontalAlignment="Center"/>
+                  <local:PhosphorIcon Kind="Play" Width="40" Height="40" Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Center"/>
                   <TextBlock Text="Choose a clip to preview" FontSize="18" Margin="0,20,0,0"/>
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="2" Margin="24,0">
+            <Grid Grid.Row="2" Margin="19,0,9,0">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="96"/>
                 <ColumnDefinition Width="*"/>
@@ -410,10 +549,68 @@
                 </Button>
               </StackPanel>
             </Grid>
-            <Grid x:Name="PlaybackActivityPanel" Grid.Row="1" Margin="24,8,24,0"><Grid.RowDefinitions><RowDefinition Height="25"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Text="Activity" FontSize="12" FontWeight="SemiBold"/><TextBlock x:Name="ApmSummary" Grid.Column="1" Text="APM —" FontSize="11" Foreground="{DynamicResource SecondaryBrush}" TextAlignment="Right" Margin="8,0" ToolTip="APM rate over a rolling 10-second window"/></Grid><local:PlaybackTimeline x:Name="PlaybackActivity" Grid.Row="1" AutomationProperties.Name="Match activity timeline"/></Grid>
+            <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9"
+                    Margin="19,10,9,0" Visibility="{Binding Visibility,ElementName=PlaybackActivityPanel}">
+              <Grid x:Name="PlaybackActivityPanel" Margin="11,7,11,4">
+                <Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <DockPanel LastChildFill="True">
+                  <TextBlock x:Name="ApmSummary" DockPanel.Dock="Right" Text="APM —" FontSize="11" Foreground="{DynamicResource SecondaryBrush}" Margin="12,0,2,0" ToolTip="APM rate over a rolling 10-second window"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                    <local:PhosphorIcon Kind="Kill" Width="12" Height="12" Foreground="{DynamicResource KillBrush}" Margin="0,0,4,0"/>
+                    <TextBlock Text="Kill" FontSize="10" Foreground="{DynamicResource SecondaryBrush}" Margin="0,0,9,0"/>
+                    <local:PhosphorIcon Kind="Assist" Width="12" Height="12" Foreground="{DynamicResource AssistBrush}" Margin="0,0,4,0"/>
+                    <TextBlock Text="Assist" FontSize="10" Foreground="{DynamicResource SecondaryBrush}" Margin="0,0,9,0"/>
+                    <local:PhosphorIcon Kind="Death" Width="12" Height="12" Foreground="{DynamicResource DeathBrush}" Margin="0,0,4,0"/>
+                    <TextBlock Text="Death" FontSize="10" Foreground="{DynamicResource SecondaryBrush}"/>
+                  </StackPanel>
+                  <TextBlock Text="Activity timeline" FontSize="12" FontWeight="Bold"/>
+                </DockPanel>
+                <local:PlaybackTimeline x:Name="PlaybackActivity" Grid.Row="1" AutomationProperties.Name="Match activity timeline"/>
+              </Grid>
+            </Border>
             <Slider x:Name="Seek" Visibility="Collapsed" Minimum="0" Maximum="1" ValueChanged="SeekChanged" PreviewMouseLeftButtonDown="SeekDown" PreviewMouseLeftButtonUp="SeekUp" Grid.Row="1" Margin="24,2,24,0" IsMoveToPointEnabled="True" AutomationProperties.Name="Playback position"/>
           </Grid>
-          <Border x:Name="Inspector" Grid.Column="1" Background="{DynamicResource PanelBrush}" BorderBrush="#30333B" BorderThickness="1,0,0,0" Padding="20,24,20,18" Visibility="Collapsed">
+          <Border x:Name="ReviewDesk" Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="14" Margin="6,0,19,10" Padding="14,15,13,10" Visibility="Collapsed">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <DockPanel Margin="0,0,0,13">
+                <local:PhosphorIcon Kind="Clock" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" Margin="0,0,7,0"/>
+                <TextBlock Text="Event index" FontSize="16" FontWeight="Bold"/>
+              </DockPanel>
+              <UniformGrid Grid.Row="1" Rows="1" Margin="0,0,0,12">
+                <Border Background="{DynamicResource AccentBrush}" CornerRadius="7" Padding="7,6" Margin="0,0,4,0">
+                  <StackPanel><TextBlock Text="{Binding KillCount}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}"/><TextBlock Text="Kills" FontSize="10" Foreground="{DynamicResource AccentTextBrush}"/></StackPanel>
+                </Border>
+                <Border Background="{DynamicResource RaisedBrush}" CornerRadius="7" Padding="7,6" Margin="0,0,4,0">
+                  <StackPanel><TextBlock Text="{Binding AssistCount}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AssistBrush}"/><TextBlock Text="Assists" FontSize="10" Foreground="{DynamicResource SecondaryBrush}"/></StackPanel>
+                </Border>
+                <Border Background="{DynamicResource RaisedBrush}" CornerRadius="7" Padding="7,6">
+                  <StackPanel><TextBlock Text="{Binding DeathCount}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource DeathBrush}"/><TextBlock Text="Deaths" FontSize="10" Foreground="{DynamicResource SecondaryBrush}"/></StackPanel>
+                </Border>
+              </UniformGrid>
+              <Grid Grid.Row="2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl x:Name="ReviewEvents">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Button Click="ReviewEventClick" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Stretch" Padding="7,6" Margin="0,0,0,3"
+                                AutomationProperties.Name="{Binding Label}" ToolTip="Play from before this event">
+                          <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="27"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <local:PhosphorIcon Kind="{Binding Icon}" Foreground="{Binding Color}" Width="16" Height="16" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Stamp}" FontSize="11" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <TextBlock x:Name="EmptyReviewEvents" Text="No events in this recording." Style="{StaticResource Hint}" Margin="5,10,5,0" VerticalAlignment="Top" IsHitTestVisible="False"/>
+              </Grid>
+            </Grid>
+          </Border>
+          <Border x:Name="Inspector" Grid.Column="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1,0,0,0" Padding="20,24,20,18" Visibility="Collapsed">
             <Grid>
               <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
@@ -439,7 +636,7 @@
                       <TextBox x:Name="EndInput" Text="00:00.0" LostFocus="RangeInputChanged" FontSize="12" Padding="9,9" AutomationProperties.Name="Trim end"/>
                     </StackPanel>
                   </Grid>
-                  <Border BorderBrush="#30333B" BorderThickness="0,0,0,1" Margin="0,18,0,0" Padding="0,0,0,19">
+                  <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Margin="0,18,0,0" Padding="0,0,0,19">
                     <StackPanel>
                       <TextBlock Text="Selection duration" Style="{StaticResource Hint}"/>
                       <TextBlock x:Name="RangeLabel" Text="00:00.0" FontSize="22" FontWeight="SemiBold" Margin="0,6,0,0"/>
@@ -461,7 +658,7 @@
             </Grid>
           </Border>
         </Grid>
-        <Border x:Name="TrimWorkbench" Grid.Row="2" Background="#1A1C21" BorderBrush="#353944" BorderThickness="0,1,0,0" Padding="24,13,24,10" Visibility="Collapsed">
+        <Border x:Name="TrimWorkbench" Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="24,13,24,10" Visibility="Collapsed">
           <Grid>
             <Grid.RowDefinitions>
               <RowDefinition Height="32"/>
@@ -474,7 +671,7 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <local:PhosphorIcon Kind="Scissors" Width="17" Height="17" Foreground="#C2D4FF"/>
+                <local:PhosphorIcon Kind="Scissors" Width="17" Height="17" Foreground="{DynamicResource AccentBrush}"/>
                 <TextBlock Text="Timeline" FontWeight="SemiBold" FontSize="13" Margin="9,0,18,0"/>
                 <TextBlock Text="Drag the edges to trim" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center"/>
               </StackPanel>
@@ -508,46 +705,45 @@
       <Grid x:Name="SettingsPanel" Grid.Row="2" Grid.Column="1" Visibility="Collapsed">
         <Grid.RowDefinitions>
           <RowDefinition Height="*"/>
-          <RowDefinition Height="54"/>
+          <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="214"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-          <Border Background="#17191D" BorderBrush="#30333B" BorderThickness="0,0,1,0" Padding="22,31">
-            <StackPanel>
-              <TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Margin="5,0,0,25"/>
-              <Button x:Name="RecordingCategory" Tag="Recording" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="163"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Border Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="11,18,10,12">
+            <DockPanel>
+              <Button DockPanel.Dock="Bottom" Content="Run setup" Click="RunSetupClick" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="9,8"/>
+              <StackPanel>
+                <TextBlock Text="Settings" FontSize="22" FontWeight="Bold" Margin="8,1,0,18"/>
+              <Button x:Name="RecordingCategory" Tag="Recording" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick" Padding="9,9">
                 <StackPanel Orientation="Horizontal">
                   <local:PhosphorIcon Kind="Monitor" Width="18" Height="18"/>
                   <TextBlock Text="Recording" FontSize="13" Margin="10,0,0,0"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="AudioCategory" Tag="Audio" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick">
+              <Button x:Name="AudioCategory" Tag="Audio" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick" Padding="9,9">
                 <StackPanel Orientation="Horizontal">
                   <local:PhosphorIcon Kind="Audio" Width="18" Height="18"/>
                   <TextBlock Text="Audio" FontSize="13" Margin="10,0,0,0"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="HighlightsCategory" Tag="Highlights" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick">
+              <Button x:Name="HighlightsCategory" Tag="Highlights" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick" Padding="9,9">
                 <StackPanel Orientation="Horizontal">
                   <local:PhosphorIcon Kind="Bookmark" Width="18" Height="18"/>
                   <TextBlock Text="Highlights" FontSize="13" Margin="10,0,0,0"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="StorageCategory" Tag="Storage" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick">
+              <Button x:Name="StorageCategory" Tag="Storage" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick" Padding="9,9">
                 <StackPanel Orientation="Horizontal">
                   <local:PhosphorIcon Kind="Storage" Width="18" Height="18"/>
                   <TextBlock Text="Storage" FontSize="13" Margin="10,0,0,0"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="InputsCategory" Tag="Inputs" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick"><StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Keyboard" Width="18" Height="18"/><TextBlock Text="Input overlay" FontSize="13" Margin="10,0,0,0"/></StackPanel></Button>
-              <Button Content="Run setup" Style="{StaticResource QuietButton}" Click="RunSetupClick" HorizontalAlignment="Left" Margin="14,26,0,0"/>
-            </StackPanel>
+              <Button x:Name="InputsCategory" Tag="Inputs" Style="{StaticResource CategoryButton}" Click="SettingsCategoryClick" Padding="9,9"><StackPanel Orientation="Horizontal"><local:PhosphorIcon Kind="Keyboard" Width="18" Height="18"/><TextBlock Text="Input overlay" FontSize="13" Margin="10,0,0,0"/></StackPanel></Button>
+              </StackPanel>
+            </DockPanel>
           </Border>
           <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto">
-            <Grid MaxWidth="880" Margin="38,34,38,30">
+            <Grid MaxWidth="990" Margin="22,18,22,21">
               <StackPanel x:Name="RecordingSettings">
                 <TextBlock Text="Recording" FontSize="27" FontWeight="Bold"/>
                 <Border Style="{StaticResource SettingRow}"><DockPanel><TextBlock Text="Theme" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox x:Name="ThemeBox" Width="230" HorizontalAlignment="Right" SelectedIndex="0"><ComboBoxItem Content="Dark"/><ComboBoxItem Content="Light"/><ComboBoxItem Content="Follow Windows"/></ComboBox></DockPanel></Border>
@@ -721,17 +917,52 @@
                 <Button Content="Storage usage and cleanup" Click="StorageToolsClick" HorizontalAlignment="Left" Margin="0,17,0,0"/>
               </StackPanel>
               <StackPanel x:Name="InputSettings" Visibility="Collapsed">
-                <TextBlock Text="Input overlay" FontSize="27" FontWeight="Bold"/>
-                <Border Style="{StaticResource SettingRow}" Padding="0,14"><StackPanel><StackPanel Orientation="Horizontal"><CheckBox x:Name="InputVisibleBox" Content="Show overlay on clips" IsChecked="True"/><CheckBox x:Name="InputApmBox" Content="Show APM" IsChecked="True" Margin="28,0,0,0"/></StackPanel><TextBlock Text="Enable gameplay input recording in Highlights for keys and APM." Style="{StaticResource Hint}" Margin="0,12,0,0"/></StackPanel></Border>
-                <Border Style="{StaticResource SettingRow}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><DockPanel Margin="0,0,0,9"><Button DockPanel.Dock="Right" Content="Choose keys" Click="CustomizeInputsClick" Padding="8,2" MinHeight="24" Style="{StaticResource QuietButton}"/><TextBlock Text="Layout" VerticalAlignment="Center"/></DockPanel><ComboBox x:Name="InputLayoutBox" SelectedIndex="0"><ComboBoxItem Content="Compact keys + mouse"/><ComboBoxItem Content="Extended keys + mouse"/><ComboBoxItem Content="Mouse"/><ComboBoxItem Content="Custom keys"/></ComboBox></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Style" Margin="0,0,0,9"/><ComboBox x:Name="InputStyleBox" SelectedIndex="0"><ComboBoxItem Content="Dark"/><ComboBoxItem Content="Light"/><ComboBoxItem Content="Outline"/></ComboBox></StackPanel></Grid></Border>
-                <DockPanel Margin="0,18,0,8"><Button DockPanel.Dock="Right" Content="Use latest clip" Click="RefreshPlacementPreviewClick" Style="{StaticResource QuietButton}" Padding="8,3" MinHeight="28" ToolTip="Use the selected clip, or the latest recording"/><TextBlock Text="Position on screen" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel>
-                <Border HorizontalAlignment="Left" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" ClipToBounds="True"><local:OverlayPlacement x:Name="InputPlacementPreview"/></Border>
-                <Border Style="{StaticResource SettingRow}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Size"/><Slider x:Name="InputSizeSlider" Minimum="0.15" Maximum="0.85" Value="0.34" ValueChanged="InputSizeChanged" Margin="0,14,0,0"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Position" Margin="0,0,0,9"/><ComboBox x:Name="InputPositionBox" SelectedIndex="0" SelectionChanged="InputPositionChanged"><ComboBoxItem Content="Bottom left"/><ComboBoxItem Content="Bottom right"/><ComboBoxItem Content="Top left"/><ComboBoxItem Content="Top right"/><ComboBoxItem Content="Custom"/></ComboBox></StackPanel></Grid></Border>
+                <TextBlock Text="Input overlay" FontSize="27" FontWeight="Bold" Margin="0,0,0,6"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="243"/><ColumnDefinition Width="15"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <Border Style="{StaticResource SettingRow}" Margin="0">
+                      <StackPanel>
+                        <CheckBox x:Name="InputVisibleBox" Content="Show overlay on clips" IsChecked="True"/>
+                        <CheckBox x:Name="InputApmBox" Content="Show APM" IsChecked="True" Margin="0,10,0,0"/>
+                        <TextBlock Text="Enable input recording in Highlights to capture keys and APM." Style="{StaticResource Hint}" Margin="0,10,0,0"/>
+                      </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SettingRow}">
+                      <StackPanel>
+                        <DockPanel Margin="0,0,0,7">
+                          <Button DockPanel.Dock="Right" Content="Choose keys" Click="CustomizeInputsClick" Padding="7,1" MinHeight="24" Style="{StaticResource QuietButton}"/>
+                          <TextBlock Text="Layout" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <ComboBox x:Name="InputLayoutBox" SelectedIndex="0"><ComboBoxItem Content="Compact keys + mouse"/><ComboBoxItem Content="Extended keys + mouse"/><ComboBoxItem Content="Mouse"/><ComboBoxItem Content="Custom keys"/></ComboBox>
+                        <TextBlock Text="Style" Margin="0,12,0,7"/>
+                        <ComboBox x:Name="InputStyleBox" SelectedIndex="0"><ComboBoxItem Content="Dark"/><ComboBoxItem Content="Light"/><ComboBoxItem Content="Outline"/></ComboBox>
+                      </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SettingRow}">
+                      <StackPanel>
+                        <TextBlock Text="Size"/>
+                        <Slider x:Name="InputSizeSlider" Minimum="0.15" Maximum="0.85" Value="0.34" ValueChanged="InputSizeChanged" Margin="0,6,0,8"/>
+                        <TextBlock Text="Position" Margin="0,0,0,7"/>
+                        <ComboBox x:Name="InputPositionBox" SelectedIndex="0" SelectionChanged="InputPositionChanged"><ComboBoxItem Content="Bottom left"/><ComboBoxItem Content="Bottom right"/><ComboBoxItem Content="Top left"/><ComboBoxItem Content="Top right"/><ComboBoxItem Content="Custom"/></ComboBox>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <DockPanel Margin="0,0,0,8">
+                      <Button DockPanel.Dock="Right" Content="Use latest clip" Click="RefreshPlacementPreviewClick" Style="{StaticResource QuietButton}" Padding="8,3" MinHeight="28" ToolTip="Use the selected clip, or the latest recording"/>
+                      <TextBlock Text="Placement preview" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" ClipToBounds="True">
+                      <local:OverlayPlacement x:Name="InputPlacementPreview"/>
+                    </Border>
+                  </StackPanel>
+                </Grid>
               </StackPanel>
             </Grid>
           </ScrollViewer>
         </Grid>
-        <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="#30333B" BorderThickness="0,1,0,0" Padding="26,14">
+        <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="26,14">
           <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding Text,ElementName=SettingsError}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
           <Grid>
             <Grid.ColumnDefinitions>
@@ -744,7 +975,7 @@
           </Grid>
         </Border>
       </Grid>
-      <Border x:Name="Toast" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#30394B" BorderBrush="#65769A" BorderThickness="1" CornerRadius="9" Padding="15,10" Margin="24" Visibility="Collapsed" Panel.ZIndex="30" MaxWidth="460">
+      <Border x:Name="Toast" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Padding="15,10" Margin="24" Visibility="Collapsed" Panel.ZIndex="30" MaxWidth="460">
         <DockPanel>
           <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Click="DismissToastClick" AutomationProperties.Name="Dismiss notification" Margin="12,0,0,0">
             <local:PhosphorIcon Kind="Close" Width="15" Height="15"/>
@@ -753,7 +984,7 @@
         </DockPanel>
       </Border>
       <Border x:Name="DeleteOverlay" KeyboardNavigation.TabNavigation="Cycle" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="#B008090D" Visibility="Collapsed" Panel.ZIndex="20">
-        <Border Width="430" Background="#24272E" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28">
+        <Border Width="430" Background="{DynamicResource PanelBrush}" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28">
           <StackPanel>
             <local:PhosphorIcon Kind="Delete" Width="27" Height="27" Foreground="#FFBFCB" HorizontalAlignment="Left"/>
             <TextBlock x:Name="DeleteTitle" Text="Delete clip?" FontSize="24" FontWeight="Bold" Margin="0,18,0,12"/>

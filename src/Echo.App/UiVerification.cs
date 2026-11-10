@@ -54,7 +54,9 @@ public partial class MainWindow
         foreach (var size in render ? new[] { new Size(1480, 920), new Size(1100, 720) } : [])
         {
             LibraryClick(this, new()); await RenderPreview(Path.Combine(output, $"gallery-{size.Width}.png"), size);
-            Check($"gallery fits {size.Width}px", ClipList.ActualWidth > 800);
+            Check($"gallery and overview fit {size.Width}px", ClipList.ActualWidth >= 600 &&
+                LibraryScroll.ViewportHeight > 400 && LibraryAside.ActualWidth >= 250 &&
+                LibraryScroll.ActualWidth + LibraryAside.ActualWidth <= LibraryPanel.ActualWidth);
             if (ClipList.Items.Count > 0)
             {
                 ClipList.SelectedIndex = 0; PrepareVerificationPreview();
@@ -68,13 +70,25 @@ public partial class MainWindow
                 Check($"volume track is visible at {size.Width}px", track.DecreaseRepeatButton.ActualWidth > 2 && track.IncreaseRepeatButton.ActualWidth > 2);
                 Check($"editor fits {size.Width}px", VideoSurface.ActualWidth >= 600 && VideoSurface.ActualHeight >= 200 && TrimWorkbench.ActualWidth >= 900);
             }
+            MatchesClick(this, new());
+            if (ClipList.Items.Count > 0)
+            {
+                await RenderPreview(Path.Combine(output, $"matches-{size.Width}.png"), size);
+                Check($"full match library uses its match layout at {size.Width}px", ClipList.Items.Cast<ClipItem>().All(item => item.WholeMatch) &&
+                    OverviewItemLabel.Text == "Matches" && FeaturedLabel.Text == "LATEST MATCH");
+            }
             SettingsClick(this, new());
             foreach (var category in new[] { "Recording", "Audio", "Highlights", "Storage","Inputs" })
             {
                 ShowSettingsCategory(category);
                 await RenderPreview(Path.Combine(output, $"settings-{category.ToLowerInvariant()}-{size.Width}.png"), size);
                 Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings,InputSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
-                if(category=="Inputs"){var frame=InputPlacementPreview.TransformToAncestor(SettingsScroll).TransformBounds(new Rect(InputPlacementPreview.RenderSize));Check($"entire gameplay HUD preview fits at {size.Width}px",frame.Top>=0&&frame.Bottom<=SettingsScroll.ActualHeight+1);}
+                if (category == "Inputs")
+                {
+                    var frame = InputPlacementPreview.TransformToAncestor(SettingsScroll).TransformBounds(new Rect(InputPlacementPreview.RenderSize));
+                    Check($"entire gameplay HUD preview fits at {size.Width}px", frame.Top >= 0 && frame.Bottom <= SettingsScroll.ActualHeight + 1 &&
+                        frame.Width >= 520 && Math.Abs(frame.Width / frame.Height - 16d / 9) < .01);
+                }
             }
         }
         var testPaths = new HostPaths(Path.Combine(output, "settings-profile")); var probe = new MainWindow(testPaths, false);
@@ -111,6 +125,22 @@ public partial class MainWindow
     {
         RefreshCatalog(true);
         var template = _items.First();
+        check("latest playable highlight is featured", ReferenceEquals(FeaturedPanel.DataContext, template) && FeaturedPanel.Visibility == Visibility.Visible);
+        check("hero and library show positions of real recorded events", template.EventPoints.Count == 3 &&
+            template.EventPoints.All(point => point.Fraction is >= 0 and <= 1) && template.EventCount == 3);
+        FeaturedClick(this, new());
+        check("featured highlight opens the real player", _selected?.Entry == template.Entry && EditorPanel.Visibility == Visibility.Visible);
+        PrepareVerificationPreview();
+        check("review desk lists recorded events alongside playback", ReviewDesk.Visibility == Visibility.Visible && ReviewEvents.Items.Count == 3);
+        var firstEvent = (ReviewEvent)ReviewEvents.Items[0];
+        ReviewEventClick(new Button { DataContext = firstEvent }, new());
+        check("event index opens footage before the action", Math.Abs(Timeline.Position -
+            PlaybackNavigation.BeforeEvent(template.Clip, firstEvent.RecordingTime, Timeline.SelectionStart, Timeline.SelectionEnd)) < .01);
+        BackToLibraryClick(this, new());
+        FavoritesClick(this, new());
+        check("sidebar Favorites selects the favorites library view", LibraryView.SelectedIndex == 1 && PageTitle.Text == "Favorites");
+        LibraryClick(this, new());
+        check("Library restores the full gallery", LibraryView.SelectedIndex == 0 && PageTitle.Text == "Library");
         _items.Clear();
         for (int i = 0; i < 65; i++)
         {
@@ -119,7 +149,21 @@ public partial class MainWindow
             _items.Add(new(session, clip, template.Clip.ThumbnailPath));
         }
         ApplyFilter();
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "library-dark.png"), new(1480, 920));
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "library-compact.png"), new(1100, 720));
+        var viewBounds = LibraryView.TransformToAncestor(LibraryPanel).TransformBounds(new Rect(LibraryView.RenderSize));
+        var filterBounds = MomentFilters.TransformToAncestor(LibraryPanel).TransformBounds(new Rect(MomentFilters.RenderSize));
+        check("library filters and view controls do not overlap at 1100 pixels", !filterBounds.IntersectsWith(viewBounds));
+        check("dashboard summary and recent captures use the current catalog", LibraryAside.Visibility == Visibility.Visible &&
+            OverviewItems.Text == "65" && OverviewSessions.Text == "65" && RecentItems.Items.Count == 5);
+        ThemeService.Apply("Light");
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "library-light.png"), new(1480, 920));
+        check("light theme updates the selected navigation and controls", Equals(LibraryNav.Background, FindResource("NavigationBrush")) &&
+            Equals(FilterAll.Background, FindResource("NavigationActiveBrush")));
+        ThemeService.Apply("Dark");
         SetSelectionMode(true);
+        check("bulk selection frees space for the gallery", FeaturedPanel.Visibility == Visibility.Collapsed &&
+            LibraryAside.Visibility == Visibility.Collapsed && LibraryAsideColumn.Width.Value == 0);
         _galleryPage = 2;
         ApplyFilter();
         SelectPageClick(this, new());

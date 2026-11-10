@@ -35,7 +35,9 @@ public partial class MainWindow
         _libraryView = Math.Max(0, LibraryView.SelectedIndex);
         MomentFilters.Visibility = _libraryView < 2 ? Visibility.Visible : Visibility.Collapsed;
         _galleryPage = 0;
+        LibraryScroll.ScrollToTop();
         SetSelectionMode(false, refresh: false);
+        UpdateLibraryHeading();
         RefreshCatalog(true);
     }
 
@@ -48,7 +50,11 @@ public partial class MainWindow
         _bindingGallery = false;
         SelectModeButton.Content = selecting ? "Done" : "Select";
         SelectionToolbar.Visibility = selecting ? Visibility.Visible : Visibility.Collapsed;
-        if (refresh) ApplyFilter();
+        if (refresh)
+        {
+            LibraryScroll.ScrollToTop();
+            ApplyFilter();
+        }
     }
 
     private void MoreEventsClick(object sender, RoutedEventArgs e)
@@ -96,9 +102,11 @@ public partial class MainWindow
     private static void OpenMenu(Button anchor, params (string Label, bool Enabled, Action Run)[] actions)
     {
         var menu = new ContextMenu { PlacementTarget = anchor, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        menu.SetResourceReference(StyleProperty, "ToolMenu");
         foreach (var (label, enabled, run) in actions)
         {
             var item = new MenuItem { Header = label, IsEnabled = enabled };
+            item.SetResourceReference(StyleProperty, "ToolMenuItem");
             item.Click += (_, _) => run();
             menu.Items.Add(item);
         }

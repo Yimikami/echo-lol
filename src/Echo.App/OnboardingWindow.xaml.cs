@@ -19,19 +19,35 @@ public partial class OnboardingWindow : Window
         KillsChoice.IsChecked=_original.CaptureKills;AssistsChoice.IsChecked=_original.CaptureAssists;DeathsChoice.IsChecked=_original.CaptureDeaths;
         BeforeChoice.Text=_original.BeforeSeconds.ToString();AfterChoice.Text=_original.AfterSeconds.ToString();ShortcutChoice.Text=_original.ManualShortcut;InputsChoice.IsChecked=_original.RecordInputs;
         GameChoice.IsChecked=_original.GameAudio;DesktopChoice.IsChecked=_original.DesktopAudio;MicChoice.IsChecked=_original.Microphone;FolderChoice.Text=_original.OutputDirectory;
-        string[] labels=["Appearance","Recording","Highlights","Audio","Finish"];
-        string[] icons=["Settings","Recording","Bookmark","Audio","Folder"];
-        for(int i=0;i<labels.Length;i++){var row=new StackPanel{Orientation=Orientation.Horizontal};row.Children.Add(new Controls.PhosphorIcon{Kind=icons[i],Width=18,Height=18});row.Children.Add(new TextBlock{Text=labels[i],Margin=new(12,0,0,0)});var button=new Button{Content=row,Tag=i,Style=(Style)FindResource("CategoryButton"),Margin=new(-8,3,-8,3)};button.Click+=StepClick;SetupSteps.Children.Add(button);}
+        string[] labels = ["Appearance", "Recording", "Highlights", "Audio", "Finish"];
+        for (int i = 0; i < labels.Length; i++)
+        {
+            var button = new Button
+            {
+                Content = labels[i], Tag = i, Style = (Style)FindResource("QuietButton"), FontSize = 11,
+                Padding = new Thickness(9, 5, 9, 5), MinHeight = 32, Margin = new Thickness(0, 0, 4, 3)
+            };
+            button.Click += StepClick;
+            SetupSteps.Children.Add(button);
+        }
         _ready=true;ShowStep(); Closing+=(_,_)=>{if(!_saved)SaveDefaults();};
     }
     private void ShowStep()
     {
         FrameworkElement[] panels=[AppearanceStep,CaptureStep,HighlightsStep,AudioStep,StorageStep];for(int i=0;i<panels.Length;i++)panels[i].Visibility=i==_step?Visibility.Visible:Visibility.Collapsed;
-        string[] titles=["Make it yours","Choose your recording","Keep your best moments","Choose your audio","You're ready to play"];
+        string[] titles=["Appearance","Recording mode","Highlights","Audio sources","Review setup"];
         string[] descriptions=["Choose a look and recording quality that suit your setup.","Echo starts recording automatically when you enter a match.","Choose what gets saved and how much of the action to keep.","Decide what your clips should sound like.","Pick a folder and review your setup."];
-        StepTitle.Text=titles[_step];StepDescription.Text=descriptions[_step];StepNumber.Text=$"{_step+1} / 5";Progress.Value=_step+1;
+        StepTitle.Text=titles[_step];StepDescription.Text=descriptions[_step];StepNumber.Text=$"Step {_step + 1} of 5";Progress.Value=_step+1;
         BackButton.Visibility=_step==0?Visibility.Collapsed:Visibility.Visible;NextButton.Content=_step==4?"Start using Echo":"Continue";SetupError.Text="";SetupScroll.ScrollToTop();
-        foreach(Button button in SetupSteps.Children){var active=(int)button.Tag==_step;button.Background=active?(Brush)FindResource("RaisedBrush"):Brushes.Transparent;button.Foreground=(Brush)FindResource(active?"TextBrush":"SecondaryBrush");}
+        foreach (Button button in SetupSteps.Children)
+        {
+            bool active = (int)button.Tag == _step;
+            if (active)
+                button.SetResourceReference(BackgroundProperty, "NavigationBrush");
+            else
+                button.Background = Brushes.Transparent;
+            button.SetResourceReference(ForegroundProperty, active ? "FavoriteBrush" : "SecondaryBrush");
+        }
         var sources=new List<string>();if(GameChoice.IsChecked==true&&DesktopChoice.IsChecked!=true)sources.Add("Game audio");if(DesktopChoice.IsChecked==true)sources.Add("Desktop audio");if(MicChoice.IsChecked==true)sources.Add("Microphone");
         SetupSummary.Text=$"{((ComboBoxItem)QualityChoice.SelectedItem).Content} · {(ModeChoice.SelectedIndex==1?"Entire match":"Highlights")}\n{(sources.Count>0?string.Join(" + ",sources):"No audio")}";
     }

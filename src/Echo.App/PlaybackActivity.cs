@@ -2,12 +2,15 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using Echo.App.Controls;
 using Echo.Core;
 
 namespace Echo.App;
 
 public partial class MainWindow
 {
+    private sealed record ReviewEvent(double RecordingTime, string Label, string Icon, Brush Color, string Stamp);
     private sealed record MatchApm(string Title, DateTimeOffset Date, double Average, double Duration);
     private sealed record Comparison(MatchApm Current, MatchApm[] Previous)
     {
@@ -21,8 +24,11 @@ public partial class MainWindow
     {
         bool visible = !_trimOpen || _fullscreen;
         PlaybackActivityPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        PlayerDock.RowDefinitions[1].Height = new(visible ? 136 : 22);
+        PlayerDock.RowDefinitions[1].Height = new(visible ? 148 : 22);
         Seek.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        bool showIndex = !_trimOpen && !_fullscreen;
+        ReviewDesk.Visibility = showIndex ? Visibility.Visible : Visibility.Collapsed;
+        ReviewColumn.Width = new GridLength(showIndex ? 278 : 0);
     }
 
     private void SetTimelineMoments(ClipItem item)
@@ -32,6 +38,16 @@ public partial class MainWindow
         Timeline.Moments = mapped.Select(m => (m.Time!.Value, m.Moment.Kind)).ToArray();
         Timeline.MomentLabels = mapped.GroupBy(m => m.Time!.Value).ToDictionary(group => group.Key,
             group => string.Join(" / ", group.Select(marker => marker.Moment.Label).Distinct()));
+        var events = mapped.Where(m => m.Time!.Value >= item.Clip.Start && m.Time.Value <= item.Clip.End)
+            .Select(m => new ReviewEvent(m.Moment.RecordingTime, m.Moment.Label, MomentGlyph.For(m.Moment.Kind),
+                (Brush)FindResource(MomentGlyph.BrushFor(m.Moment.Kind)), Time(m.Time!.Value - item.Clip.Start, item.Clip.End - item.Clip.Start < 10))).ToArray();
+        ReviewEvents.ItemsSource = events;
+        EmptyReviewEvents.Visibility = events.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ReviewEventClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ReviewEvent row }) PreviewMoment(row.RecordingTime);
     }
 
     private void RefreshPlaybackActivity()

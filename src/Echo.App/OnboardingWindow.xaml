@@ -12,28 +12,33 @@
   <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="218" />
+        <ColumnDefinition Width="300" />
         <ColumnDefinition />
       </Grid.ColumnDefinitions>
-      <Border Background="{DynamicResource SidebarBrush}" Padding="24,30">
-        <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <StackPanel Orientation="Horizontal" MouseLeftButtonDown="SetupDrag">
-            <Image Source="pack://application:,,,/Echo;component/Assets/echo-emblem.png" Width="32" Height="32" />
-            <TextBlock Text="Echo" FontSize="23" FontWeight="Bold" VerticalAlignment="Center" Margin="12,0,0,0" />
+      <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
+        <Border.Background>
+          <ImageBrush ImageSource="pack://application:,,,/Echo;component/Assets/game-preview.png" Stretch="UniformToFill" AlignmentX="Right"/>
+        </Border.Background>
+        <Grid MouseLeftButtonDown="SetupDrag">
+          <Grid.Background>
+            <LinearGradientBrush StartPoint="0,1" EndPoint=".62,0">
+              <GradientStop Color="#FF100E19" Offset="0"/>
+              <GradientStop Color="#DE201A35" Offset=".48"/>
+              <GradientStop Color="#54161424" Offset="1"/>
+            </LinearGradientBrush>
+          </Grid.Background>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="23,24,0,0">
+            <Image Source="pack://application:,,,/Echo;component/Assets/echo-emblem.png" Width="32" Height="32"/>
+            <TextBlock Text="Echo" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" Margin="11,0,0,0"/>
           </StackPanel>
-          <StackPanel x:Name="SetupSteps" Grid.Row="1" Margin="0,52,0,0" />
-          <StackPanel Grid.Row="2">
-            <TextBlock x:Name="StepNumber" Text="1 / 5" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" />
-            <ProgressBar x:Name="Progress" Maximum="5" Value="1" Height="3" Margin="0,12,0,0" />
+          <StackPanel VerticalAlignment="Bottom" Margin="23,0,23,29">
+            <TextBlock Text="Capture setup" FontSize="28" FontWeight="Bold" Foreground="#F4F1FA"/>
+            <TextBlock x:Name="StepNumber" Text="Step 1 of 5" FontSize="12" Foreground="#D1C8E4" Margin="0,7,0,0"/>
+            <ProgressBar x:Name="Progress" Maximum="5" Value="1" Height="4" Foreground="#C5F65B" Margin="0,14,0,0"/>
           </StackPanel>
         </Grid>
       </Border>
-      <Grid Grid.Column="1" Background="{DynamicResource BackgroundBrush}" Margin="34,30,34,26">
+      <Grid Grid.Column="1" Background="{DynamicResource BackgroundBrush}" Margin="34,28,34,22">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
@@ -41,8 +46,8 @@
         </Grid.RowDefinitions>
         <Grid MouseLeftButtonDown="SetupDrag">
           <StackPanel Margin="0,0,35,0">
-            <TextBlock Text="WELCOME TO ECHO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,12" />
-            <TextBlock x:Name="StepTitle" Text="Make it yours" FontSize="29" FontWeight="Bold" />
+            <WrapPanel x:Name="SetupSteps" Margin="0,0,0,18"/>
+            <TextBlock x:Name="StepTitle" Text="Appearance" FontSize="33" FontWeight="Bold" />
             <TextBlock x:Name="StepDescription" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,12,0,0" />
           </StackPanel>
           <Button HorizontalAlignment="Right" VerticalAlignment="Top" Click="SkipClick" Style="{StaticResource IconButton}" ToolTip="Skip setup" AutomationProperties.Name="Skip setup">

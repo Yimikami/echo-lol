@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Shell;
+using Shape = System.Windows.Shapes.Shape;
 using Echo.Core;
 using Echo.Recorder;
 using Microsoft.Win32;
@@ -60,7 +61,6 @@ public partial class MainWindow : Window
         PlaybackActivity.SeekRequested += SeekTo;
         PlaybackActivity.MomentRequested += t=>{SeekTo(Math.Max(PlaybackActivity.Start,t-3));SetPlaying(true);};
         InputPlacementPreview.PlacementChanged += preset => { _inputPreset=preset; PersistInputPreset(); };
-        SettingsScroll.SizeChanged+=(_,_)=>InputPlacementPreview.MaxWidth=Math.Clamp((SettingsScroll.ActualHeight-340)*16/9,320,880);
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
         _timer.Tick += (_, _) => Tick(); _timer.Start();
         Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
@@ -100,10 +100,10 @@ public partial class MainWindow : Window
             bool fresh = status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8);
             _status = fresh ? status! : new() { State = "Recorder offline", UpdatedAt = DateTimeOffset.MinValue };
             HeaderStatus.Text = _status.Recording ? (_status.ActiveMode == RecordingMode.FullMatch ? "Full match " : "Highlights ") + Time(_status.ElapsedSeconds) : !fresh ? "Capture offline" : _status.Error != null ? "Capture needs attention" : _status.Armed ? "Auto capture on" : "Capture paused";
-            StatusDot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_status.Recording ? "#F1B7BD" : fresh && _status.Armed ? "#C2D4FF" : "#A1A7B2"));
+            StatusDot.SetResourceReference(Shape.FillProperty, _status.Recording ? "DeathBrush" : fresh && _status.Armed ? "AccentBrush" : "SecondaryBrush");
             CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
             CaptureGlyph.Kind = _status.Armed ? "Recording" : "Play";
-            RecorderLabel.Text = !fresh ? "Offline" : _status.Armed ? "Auto on" : "Paused";
+            RecorderLabel.Text = !fresh ? "Offline" : _status.Recording ? "REC" : _status.Armed ? "Auto" : "Paused";
             ErrorBanner.Text = _status.Error ?? "";
             ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
             ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
@@ -163,7 +163,11 @@ public partial class MainWindow : Window
     private void ApplyFilter(bool resetPage = false)
     {
         if (ClipList == null || SearchBox == null || SortBox == null) return;
-        if (resetPage) _galleryPage = 0;
+        if (resetPage)
+        {
+            _galleryPage = 0;
+            LibraryScroll?.ScrollToTop();
+        }
         var query = SearchBox.Text.Trim();
         var filtered = _items.Where(i => (_libraryView >= 2 || _filter == "All" || i.HasEvent(_filter)) &&
             (query.Length == 0 || $"{i.Title} {i.DateLabel} {i.Subtitle}".Contains(query, StringComparison.OrdinalIgnoreCase)));
@@ -180,23 +184,95 @@ public partial class MainWindow : Window
                 if (_selection.Contains(item.Entry)) ClipList.SelectedItems.Add(item);
         _bindingGallery = false;
         UpdateSelectionToolbar();
-        LibraryCount.Text = $"{visible.Length} {(_matches ? "matches" : "moments")} ";
+        var itemName = _matches ? visible.Length == 1 ? "match" : "matches" : visible.Length == 1 ? "clip" : "clips";
+        LibraryCount.Text = $"{visible.Length} {itemName}";
+        GalleryTitle.Text = _libraryView switch
+        {
+            1 => _matches ? "Saved matches" : "Saved clips",
+            2 => "Recently deleted",
+            3 => "Unavailable recordings",
+            _ => _matches ? "All matches" : "All clips"
+        };
+        RefreshLibraryDashboard(visible, query.Length == 0);
         EmptyGallery.Visibility = visible.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyTitle.Text = _libraryView switch
+        {
+            1 => "No favorites yet",
+            2 => "Trash is empty",
+            3 => "No missing files",
+            _ => _items.Count > 0 ? "No results" : _matches ? "No matches yet" : "No clips yet"
+        };
         EmptyList.Text = _items.Count == 0 ? (_matches ? (_settings.Mode == RecordingMode.FullMatch ? "Your next full match will appear here." : "Choose Entire match in Recording settings to save complete games here.") : "Keep Echo running and play League. Your kills, assists and deaths will appear here automatically.") : "No clips match your search. Try another event or search term.";
         if (_libraryView >= 1 && visible.Length == 0)
             EmptyList.Text = _libraryView switch { 1 => "Items you favorite appear here.", 2 => "Your Trash is empty.", _ => "All recording files are available." };
         PageLabel.Text = $"Page {_galleryPage + 1} of {pages}"; PreviousPageButton.IsEnabled = _galleryPage > 0; NextPageButton.IsEnabled = _galleryPage < pages - 1;
         if (visible.Length == 0 && _selected == null) ClearPlayer();
     }
-    private void GalleryWidthChanged(object sender, SizeChangedEventArgs e)
+    private void RefreshLibraryDashboard(IReadOnlyList<ClipItem> items, bool unsearched)
     {
-        var width = Math.Max(400, ClipList.ActualWidth - 22); var columns = Math.Max(2, Math.Floor(width / 285));
-        var tile = Math.Floor(width / columns) - 16;
-        ClipList.Resources["GalleryTileWidth"] = tile; ClipList.Resources["GalleryThumbnailHeight"] = (tile - 12) * 9 / 16;
+        if (LibraryAside == null) return;
+        bool showDesk = _libraryView == 0 && _filter == "All" && !_selecting && _galleryPage == 0 &&
+            SortBox.SelectedIndex == 0 && unsearched && items.Count > 0;
+        var featured = showDesk ? items.FirstOrDefault(item => item.IsReady) : null;
+        FeaturedPanel.DataContext = featured;
+        FeaturedPanel.Visibility = featured == null ? Visibility.Collapsed : Visibility.Visible;
+        FeaturedLabel.Text = _matches ? "LATEST MATCH" : "LATEST HIGHLIGHT";
+        FeaturedPlayLabel.Text = _matches ? "Play match" : "Play clip";
+
+        LibraryAsideColumn.Width = new GridLength(showDesk ? 268 : 0);
+        LibraryGutter.Width = new GridLength(showDesk ? 18 : 0);
+        LibraryAside.Visibility = showDesk ? Visibility.Visible : Visibility.Collapsed;
+        if (!showDesk) return;
+
+        OverviewItemLabel.Text = _matches ? "Matches" : "Clips";
+        OverviewItems.Text = items.Count.ToString(CultureInfo.CurrentCulture);
+        OverviewSessionLabel.Text = _matches ? "Events" : "Sessions";
+        int secondaryCount = _matches ? items.Sum(item => item.EventCount) : items.Select(item => item.Session.Id).Distinct().Count();
+        OverviewSessions.Text = secondaryCount.ToString(CultureInfo.CurrentCulture);
+        OverviewFavorites.Text = items.Count(item => item.Favorite).ToString(CultureInfo.CurrentCulture);
+        var recent = items.Where(item => item != featured && item.IsReady).Take(5).ToArray();
+        RecentItems.ItemsSource = recent;
+        RecentPanel.Visibility = recent.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void FeaturedClick(object sender, RoutedEventArgs e)
+    {
+        if (FeaturedPanel.DataContext is ClipItem item) OpenRecording(item);
+    }
+
+    private void RecentCaptureClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ClipItem item }) OpenRecording(item);
+    }
+
+    private void LibraryViewportChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (FeaturedPanel == null) return;
+        bool compact = e.NewSize.Height < 620;
+        FeaturedPanel.Height = compact ? 178 : 224;
+        FeaturedTitle.FontSize = compact ? 32 : 40;
+    }
+
+    private void GalleryWidthChanged(object sender, SizeChangedEventArgs e) => UpdateGallerySizing();
+
+    private void UpdateGallerySizing()
+    {
+        var width = Math.Max(400, ClipList.ActualWidth - 18);
+        var columns = _matches ? 2 : Math.Clamp((int)(width / 258), 2, 5);
+        var tile = Math.Floor(width / columns) - 14;
+        ClipList.Resources["GalleryTileWidth"] = tile;
+        ClipList.Resources["GalleryThumbnailHeight"] = (tile - 2) * 9 / 16;
     }
     private void SortChanged(object sender, SelectionChangedEventArgs e) { if (IsInitialized) ApplyFilter(true); }
-    private void PreviousPageClick(object sender, RoutedEventArgs e) { _galleryPage--; ApplyFilter(); }
-    private void NextPageClick(object sender, RoutedEventArgs e) { _galleryPage++; ApplyFilter(); }
+    private void PreviousPageClick(object sender, RoutedEventArgs e) => MovePage(-1);
+    private void NextPageClick(object sender, RoutedEventArgs e) => MovePage(1);
+
+    private void MovePage(int direction)
+    {
+        _galleryPage += direction;
+        LibraryScroll.ScrollToTop();
+        ApplyFilter();
+    }
     private void OpenEditor()
     {
         LibraryPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; EditorPanel.Visibility = Visibility.Visible; SetTrimOpen(false);
@@ -213,8 +289,11 @@ public partial class MainWindow : Window
     {
         _selected = null; _selectionVersion++; SetPlaying(false); Player.Close(); _duration = 0;
         Timeline.Duration = 0; Timeline.Frames = []; Timeline.Moments = []; Timeline.MomentLabels = new Dictionary<double, string>(); _apmComparison = null; Timeline.InvalidateVisual();
+        ReviewDesk.DataContext = null;
+        ReviewEvents.ItemsSource = null;
+        EmptyReviewEvents.Visibility = Visibility.Visible;
         PlayerPoster.Source = null; PlayerPoster.Visibility = Visibility.Collapsed; EmptyPlayer.Visibility = Visibility.Visible;
-        SelectedTitle.Text = "Keep the moment."; SelectedDetails.Text = "Select a clip to start watching.";
+        SelectedTitle.Text = "No recording selected"; SelectedDetails.Text = "Select a clip to start watching.";
         _updating = true; Seek.Value = 0; _updating = false; TimeLabel.Text = "00:00 / 00:00"; UpdateRange();
     }
     private void ClipSelected(object sender, SelectionChangedEventArgs e)
@@ -235,8 +314,15 @@ public partial class MainWindow : Window
             ApplyFilter();
             return;
         }
+        OpenRecording(item);
+    }
+
+    private void OpenRecording(ClipItem item)
+    {
         if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
         OpenEditor();
+        ReviewDesk.DataContext = item;
+        SetTimelineMoments(item);
         if (_selected?.Entry == item.Entry && _selected.Clip.Path == item.Clip.Path)
         {
             _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Subtitle; return;
@@ -432,7 +518,8 @@ public partial class MainWindow : Window
         Inspector.Visibility = TrimWorkbench.Visibility = !fullscreen && _trimOpen ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.RowDefinitions[0].Height = new GridLength(fullscreen ? 0 : 70);
         EditorPanel.RowDefinitions[2].Height = new GridLength(!fullscreen && _trimOpen ? 216 : 0);
-        VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(24, 20, 24, 0);
+        VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(19, 0, 9, 0);
+        VideoSurface.CornerRadius = fullscreen ? new CornerRadius(0) : new CornerRadius(13);
         Grid.SetRow(EditorPanel, fullscreen ? 0 : 2); Grid.SetColumn(EditorPanel, fullscreen ? 0 : 1); Grid.SetRowSpan(EditorPanel, fullscreen ? 3 : 1); Grid.SetColumnSpan(EditorPanel, fullscreen ? 2 : 1);
         UpdateActivityVisibility();
     }
@@ -553,28 +640,73 @@ public partial class MainWindow : Window
     private void SearchChanged(object sender, TextChangedEventArgs e) => ApplyFilter(true);
     private void SetFilter()
     {
-        if (MoreEventsButton != null)
-            MoreEventsButton.Content = Enum.TryParse<MomentKind>(_filter, out var kind) && kind is not (MomentKind.Kill or MomentKind.Assist or MomentKind.Death)
-                ? kind == MomentKind.Manual ? "Manual" : KindName(kind) : "Events";
-        foreach (var button in new[] { FilterAll, FilterKills, FilterAssists, FilterDeaths })
+        if (MoreEventsButton is not { } moreEvents) return;
+        moreEvents.Content = Enum.TryParse<MomentKind>(_filter, out var kind) && kind is not (MomentKind.Kill or MomentKind.Assist or MomentKind.Death)
+            ? kind == MomentKind.Manual ? "Manual" : KindName(kind) : "Events";
+        foreach (var button in new[] { FilterAll, FilterKills, FilterAssists, FilterDeaths, moreEvents })
         {
-            var active = (string)button.Tag == _filter;
-            button.Background = active ? new SolidColorBrush(Color.FromRgb(194, 212, 255)) : Brushes.Transparent;
-            button.Foreground = active ? new SolidColorBrush(Color.FromRgb(21, 32, 59)) : (Brush)FindResource("SecondaryBrush");
-            button.BorderBrush = active ? Brushes.Transparent : (Brush)FindResource("LineBrush");
+            bool active = button == moreEvents
+                ? _filter is not ("All" or "Kill" or "Assist" or "Death")
+                : Equals(button.Tag, _filter);
+            if (active)
+                button.SetResourceReference(BackgroundProperty, "NavigationActiveBrush");
+            else
+                button.Background = Brushes.Transparent;
+            button.SetResourceReference(ForegroundProperty, active ? "NavigationTextBrush" : "SecondaryBrush");
+            if (active)
+                button.SetResourceReference(BorderBrushProperty, "NavigationActiveBrush");
+            else
+                button.BorderBrush = Brushes.Transparent;
         }
     }
     private void FilterClick(object sender, RoutedEventArgs e) { _filter = (string)((Button)sender).Tag; SetFilter(); ApplyFilter(true); }
     private void SetNav(string active)
     {
-        foreach (var pair in new[] { (LibraryNav, "Clips"), (MatchesNav, "Matches"), (SettingsNav, "Settings") })
+        foreach (var (button, page) in new[] { (LibraryNav, "Clips"), (MatchesNav, "Matches"), (FavoritesNav, "Favorites"), (SettingsNav, "Settings") })
         {
-            pair.Item1.Background = pair.Item2 == active ? new SolidColorBrush(Color.FromRgb(41, 48, 64)) : Brushes.Transparent;
-            pair.Item1.Foreground = (Brush)FindResource(pair.Item2 == active ? "AccentBrush" : "SecondaryBrush");
+            if (page == active)
+                button.SetResourceReference(BackgroundProperty, "NavigationBrush");
+            else
+                button.Background = Brushes.Transparent;
+            button.SetResourceReference(ForegroundProperty, page == active ? "FavoriteBrush" : "SecondaryBrush");
         }
     }
-    private void LibraryClick(object sender, RoutedEventArgs e) { _matches = false; _filter = "All"; _galleryPage = 0; PageTitle.Text = "Library"; BackToLibraryClick(sender, e); SetNav("Clips"); SetFilter(); RefreshCatalog(true); }
-    private void MatchesClick(object sender, RoutedEventArgs e) { _matches = true; _filter = "All"; _galleryPage = 0; PageTitle.Text = "Matches"; BackToLibraryClick(sender, e); SetNav("Matches"); SetFilter(); RefreshCatalog(true); }
+
+    private void LibraryClick(object sender, RoutedEventArgs e) => NavigateLibrary(matches: false, view: 0);
+    private void MatchesClick(object sender, RoutedEventArgs e) => NavigateLibrary(matches: true, view: 0);
+    private void FavoritesClick(object sender, RoutedEventArgs e) => NavigateLibrary(matches: false, view: 1);
+
+    private void NavigateLibrary(bool matches, int view)
+    {
+        _matches = matches;
+        UpdateGallerySizing();
+        _filter = "All";
+        _galleryPage = 0;
+        LibraryScroll.ScrollToTop();
+        BackToLibraryClick(this, new());
+        SetFilter();
+        if (LibraryView.SelectedIndex != view)
+        {
+            LibraryView.SelectedIndex = view;
+            return;
+        }
+        SetSelectionMode(false, refresh: false);
+        UpdateLibraryHeading();
+        RefreshCatalog(true);
+    }
+
+    private void UpdateLibraryHeading()
+    {
+        PageTitle.Text = _libraryView switch
+        {
+            1 when !_matches => "Favorites",
+            2 => "Trash",
+            3 => "Missing files",
+            _ => _matches ? "Matches" : "Library"
+        };
+        SetNav(_matches ? "Matches" : _libraryView == 1 ? "Favorites" : "Clips");
+    }
+
     private void SettingsClick(object sender, RoutedEventArgs e) { if (_fullscreen) SetFullscreen(false); SetPlaying(false); LibraryPanel.Visibility = Visibility.Collapsed; EditorPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Visible; SetNav("Settings"); ShowSettingsCategory(_settingsCategory); }
     private void SettingsCategoryClick(object sender, RoutedEventArgs e) => ShowSettingsCategory((string)((Button)sender).Tag);
     private void ShowSettingsCategory(string category)
@@ -584,8 +716,12 @@ public partial class MainWindow : Window
         foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
         foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory,InputsCategory })
         {
-            button.Background = (string)button.Tag == category ? (Brush)FindResource("RaisedBrush") : Brushes.Transparent;
-            button.Foreground = (Brush)FindResource((string)button.Tag == category ? "TextBrush" : "SecondaryBrush");
+            bool active = Equals(button.Tag, category);
+            if (active)
+                button.SetResourceReference(BackgroundProperty, "AccentSurfaceBrush");
+            else
+                button.Background = Brushes.Transparent;
+            button.SetResourceReference(ForegroundProperty, active ? "AccentBrush" : "SecondaryBrush");
         }
         SettingsScroll.ScrollToTop();
     }
@@ -652,7 +788,17 @@ internal sealed class ClipItem
     public bool IsReady => Session.EndedAt != null && !Clip.VideoUnavailable && File.Exists(Clip.Path) && !Clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && (!Session.PreparationPending || WholeMatch);
     public string StateLabel => Session.EndedAt == null ? "Recording" : Missing ? "File missing" : !IsReady ? "Preparing…" : "";
     public Visibility StateVisibility => StateLabel.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-    private IEnumerable<Moment> Events => Session.Moments.Where(m => Clip.EventIds != null ? Clip.EventIds.Contains(m.EventId) : PlaybackNavigation.FileTime(Clip, m.RecordingTime) is { } t && t >= Clip.Start && t <= Clip.End);
+    private IReadOnlyList<Moment>? _events;
+    private IReadOnlyList<Moment> Events => _events ??= Session.Moments.Where(m => Clip.EventIds != null
+        ? Clip.EventIds.Contains(m.EventId)
+        : PlaybackNavigation.FileTime(Clip, m.RecordingTime) is { } t && t >= Clip.Start && t <= Clip.End).ToArray();
+    private IReadOnlyList<Controls.EventPoint>? _eventPoints;
+    public IReadOnlyList<Controls.EventPoint> EventPoints => _eventPoints ??= Events
+        .Select(m => (Time: PlaybackNavigation.FileTime(Clip, m.RecordingTime), m.Kind))
+        .Where(point => point.Time >= Clip.Start && point.Time <= Clip.End)
+        .Select(point => new Controls.EventPoint((point.Time!.Value - Clip.Start) / Math.Max(.1, Clip.End - Clip.Start), point.Kind))
+        .ToArray();
+    public int EventCount => Events.Count;
     public int KillCount => Events.Count(m => m.Kind == MomentKind.Kill);
     public int DeathCount => Events.Count(m => m.Kind == MomentKind.Death);
     public int AssistCount => Events.Count(m => m.Kind == MomentKind.Assist);

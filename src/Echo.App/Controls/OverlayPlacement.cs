@@ -43,8 +43,11 @@ public sealed class OverlayPlacement : Grid
     internal string? BackgroundPath=>_backgroundPath;
     protected override Size MeasureOverride(Size availableSize)
     {
-        if(double.IsFinite(availableSize.Width)&&availableSize.Width>0)Height=availableSize.Width*9/16;
-        return base.MeasureOverride(availableSize);
+        if (!double.IsFinite(availableSize.Width) || availableSize.Width <= 0)
+            return base.MeasureOverride(availableSize);
+        var frame = new Size(availableSize.Width, availableSize.Width * 9 / 16);
+        base.MeasureOverride(frame);
+        return frame;
     }
     private void ArrangeOverlay()
     {

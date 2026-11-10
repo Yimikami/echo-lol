@@ -27,20 +27,24 @@ public sealed class ClipTimeline : FrameworkElement
     private double X(double time) => Inset + (Duration > 0 ? Math.Clamp(time / Duration, 0, 1) : 0) * Span;
     private double At(double x) => Math.Clamp((x - Inset) / Span * Duration, 0, Duration);
     private static SolidColorBrush Brush(string hex) { var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); b.Freeze(); return b; }
-    private static readonly Brush Accent = Brush("#C2D4FF"), Secondary = Brush("#A1A7B2"), Surface = Brush("#111318"), Dim = Brush("#B00C0D11");
+    private static readonly Brush Dim = Brush("#B00C0F0E");
 
     public ClipTimeline() { Focusable = true; Cursor = Cursors.Hand; MinHeight = 106; ToolTip = "Drag the edges to trim. Click a moment to preview its lead-in. Arrow keys seek; Shift + arrow seeks 0.1s."; }
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        var accent = (Brush)FindResource("AccentBrush");
+        var muted = (Brush)FindResource("SecondaryBrush");
+        var surface = (Brush)FindResource("PanelBrush");
+        var handle = (Brush)FindResource("AccentTextBrush");
         dc.DrawRectangle(Brushes.Transparent, null, new Rect(RenderSize));
-        dc.DrawRoundedRectangle(Surface, null, new Rect(Inset, Top, Span, StripHeight), 5, 5);
-        if (Duration <= 0) { Text(dc, "Select a clip to edit its timeline", new Point(Inset + 12, Top + 15), Secondary); return; }
+        dc.DrawRoundedRectangle(surface, null, new Rect(Inset, Top, Span, StripHeight), 5, 5);
+        if (Duration <= 0) { Text(dc, "Select a clip to edit its timeline", new Point(Inset + 12, Top + 15), muted); return; }
         for (int i = 0; i <= 5; i++)
         {
             var t = Duration * i / 5;
             var label = TimeSpan.FromSeconds(t).ToString(Duration >= 3600 ? @"hh\:mm\:ss" : @"mm\:ss");
-            Text(dc, label, new Point(Math.Clamp(X(t) - 15, 0, Math.Max(0, ActualWidth - 42)), 4), Secondary);
+            Text(dc, label, new Point(Math.Clamp(X(t) - 15, 0, Math.Max(0, ActualWidth - 42)), 4), muted);
         }
         if (Frames.Count > 0)
         {
@@ -62,16 +66,16 @@ public sealed class ClipTimeline : FrameworkElement
         var left = X(SelectionStart); var right = X(SelectionEnd);
         dc.DrawRectangle(Dim, null, new Rect(Inset, Top, Math.Max(0, left - Inset), StripHeight));
         dc.DrawRectangle(Dim, null, new Rect(right, Top, Math.Max(0, Inset + Span - right), StripHeight));
-        dc.DrawRoundedRectangle(null, new Pen(Accent, 2), new Rect(left, Top, Math.Max(1, right - left), StripHeight), 3, 3);
+        dc.DrawRoundedRectangle(null, new Pen(accent, 2), new Rect(left, Top, Math.Max(1, right - left), StripHeight), 3, 3);
         foreach (var x in new[] { left, right })
         {
-            dc.DrawRoundedRectangle(Accent, null, new Rect(x - 5, Top - 1, 10, StripHeight + 2), 3, 3);
-            dc.DrawLine(new Pen(Surface, 1.5), new Point(x, Top + 17), new Point(x, Top + 29));
+            dc.DrawRoundedRectangle(accent, null, new Rect(x - 5, Top - 1, 10, StripHeight + 2), 3, 3);
+            dc.DrawLine(new Pen(handle, 1.5), new Point(x, Top + 17), new Point(x, Top + 29));
         }
         double lastLabelX = -100;
         foreach (var moment in Moments.Where(m => m.Time >= 0 && m.Time <= Duration))
         {
-            var color = moment.Kind == MomentKind.Death ? Brush("#FFA891") : moment.Kind == MomentKind.Assist ? Brush("#A3C8ED") : Accent;
+            var color = (Brush)FindResource(MomentGlyph.BrushFor(moment.Kind));
             dc.DrawRoundedRectangle(color, null, new Rect(X(moment.Time) - 2, MarkerY - 6, 4, 12), 2, 2);
             if (X(moment.Time) > lastLabelX + 92)
             {
@@ -85,8 +89,8 @@ public sealed class ClipTimeline : FrameworkElement
             }
         }
         var play = X(Position);
-        dc.DrawLine(new Pen(Brushes.White, 1.5), new Point(play, Top - 4), new Point(play, Top + StripHeight + 5));
-        if (IsKeyboardFocused) dc.DrawRoundedRectangle(null, new Pen(Accent, 1), new Rect(1, 1, Math.Max(0, ActualWidth - 2), Math.Max(0, ActualHeight - 2)), 4, 4);
+        dc.DrawLine(new Pen((Brush)FindResource("TextBrush"), 1.5), new Point(play, Top - 4), new Point(play, Top + StripHeight + 5));
+        if (IsKeyboardFocused) dc.DrawRoundedRectangle(null, new Pen(accent, 1), new Rect(1, 1, Math.Max(0, ActualWidth - 2), Math.Max(0, ActualHeight - 2)), 4, 4);
     }
     private void Text(DrawingContext dc, string value, Point point, Brush brush) => dc.DrawText(new FormattedText(value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface((FontFamily)FindResource("StudioFont"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal), 11, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip), point);
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
@@ -120,6 +124,15 @@ public sealed class ClipTimeline : FrameworkElement
 
 internal static class MomentGlyph
 {
+    public static string BrushFor(MomentKind kind) => kind switch
+    {
+        MomentKind.Kill or MomentKind.MultiKill => "KillBrush",
+        MomentKind.Assist => "AssistBrush",
+        MomentKind.Death => "DeathBrush",
+        MomentKind.Manual => "FavoriteBrush",
+        _ => "AccentBrush"
+    };
+
     public static string For(MomentKind kind) => kind switch
     {
         MomentKind.Kill or MomentKind.MultiKill => "Kill",

@@ -22,7 +22,6 @@ public sealed class PlaybackTimeline : FrameworkElement
     private double Span=>Math.Max(1,ActualWidth-Left-Right);
     private double X(double time)=>Left+Math.Clamp((time-Start)/Math.Max(.001,End-Start),0,1)*Span;
     private double TimeAt(double x)=>Start+Math.Clamp((x-Left)/Span,0,1)*Math.Max(0,End-Start);
-    private static readonly Brush Death=Frozen("#D27485"),Assist=Frozen("#55A98A");
     private DrawingGroup? _chart;
     private IReadOnlyList<ActivityPoint>? _cachedActivity;
     private IReadOnlyList<(double Time,MomentKind Kind)>? _cachedMoments;
@@ -30,7 +29,6 @@ public sealed class PlaybackTimeline : FrameworkElement
     private double? _cachedReference;
     private Size _cachedSize;
     private Brush? _cachedTheme;
-    private static SolidColorBrush Frozen(string color){var brush=new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));brush.Freeze();return brush;}
     public PlaybackTimeline(){Focusable=true;Cursor=Cursors.Hand;MinHeight=98;}
     protected override void OnRender(DrawingContext dc)
     {
@@ -46,34 +44,59 @@ public sealed class PlaybackTimeline : FrameworkElement
     }
     private void DrawChart(DrawingContext dc)
     {
-        var Accent=(SolidColorBrush)FindResource("AccentBrush");var Grid=(Brush)FindResource("LineBrush");var Muted=(Brush)FindResource("SecondaryBrush");
-        var accentColor=Accent.Color;var Fill=new SolidColorBrush(Color.FromArgb(36,accentColor.R,accentColor.G,accentColor.B));Fill.Freeze();
+        var accent = (SolidColorBrush)FindResource("ActivityBrush");
+        var grid = (Brush)FindResource("LineBrush");
+        var muted = (Brush)FindResource("SecondaryBrush");
+        var band = ((Brush)FindResource("RaisedBrush")).Clone();
+        band.Opacity = .28;
+        band.Freeze();
+        var color = accent.Color;
+        var fill = new LinearGradientBrush(Color.FromArgb(70, color.R, color.G, color.B),
+            Color.FromArgb(5, color.R, color.G, color.B), 90);
+        fill.Freeze();
+
+        for (int column = 0; column < 6; column++)
+        {
+            double x = Left + column * Span / 6;
+            if (column % 2 == 0) dc.DrawRectangle(band, null, new Rect(x, GraphTop, Span / 6, MarkerY - GraphTop + 10));
+            dc.DrawLine(new Pen(grid, .6), new(x, GraphTop), new(x, MarkerY + 10));
+        }
         var points=Activity.Where(p=>p.Time>=Start&&p.Time<=End).ToArray();var peak=Math.Max(1,Math.Max(points.Select(p=>p.Apm).DefaultIfEmpty().Max(),Math.Ceiling(ReferenceApm??0)));
-        foreach(var fraction in new[]{0d,.5,1d})dc.DrawLine(new Pen(Grid,.7),new(Left,GraphTop+(GraphBottom-GraphTop)*fraction),new(ActualWidth-Right,GraphTop+(GraphBottom-GraphTop)*fraction));
+        foreach(var fraction in new[]{0d,.5,1d})dc.DrawLine(new Pen(grid,.7),new(Left,GraphTop+(GraphBottom-GraphTop)*fraction),new(ActualWidth-Right,GraphTop+(GraphBottom-GraphTop)*fraction));
         if(points.Length>0)
         {
             var shape=new StreamGeometry();using(var path=shape.Open()){path.BeginFigure(new(X(points[0].Time),GraphBottom),true,true);foreach(var point in points)path.LineTo(new(X(point.Time),GraphBottom-point.Apm/(double)peak*(GraphBottom-GraphTop)),true,false);path.LineTo(new(X(points[^1].Time),GraphBottom),true,false);}shape.Freeze();
-            dc.DrawGeometry(Fill,null,shape);
-            var line=new StreamGeometry();using(var path=line.Open()){path.BeginFigure(new(X(points[0].Time),GraphBottom-points[0].Apm/(double)peak*(GraphBottom-GraphTop)),false,false);foreach(var point in points.Skip(1))path.LineTo(new(X(point.Time),GraphBottom-point.Apm/(double)peak*(GraphBottom-GraphTop)),true,false);}line.Freeze();dc.DrawGeometry(null,new Pen(Accent,1.6),line);
-            Text(dc,peak.ToString("0",CultureInfo.InvariantCulture),new(0,GraphTop-3),Muted);Text(dc,"0",new(12,GraphBottom-10),Muted);
+            dc.DrawGeometry(fill,null,shape);
+            var line=new StreamGeometry();using(var path=line.Open()){path.BeginFigure(new(X(points[0].Time),GraphBottom-points[0].Apm/(double)peak*(GraphBottom-GraphTop)),false,false);foreach(var point in points.Skip(1))path.LineTo(new(X(point.Time),GraphBottom-point.Apm/(double)peak*(GraphBottom-GraphTop)),true,false);}line.Freeze();dc.DrawGeometry(null,new Pen(accent,1.8),line);
+            Text(dc,peak.ToString("0",CultureInfo.InvariantCulture),new(0,GraphTop-3),muted);Text(dc,"0",new(12,GraphBottom-10),muted);
         }
-        else Text(dc,"No input data",new(Left+8,GraphTop+13),Muted);
+        else Text(dc,"No input data",new(Left+8,GraphTop+13),muted);
         if (ReferenceApm is { } reference)
         {
             double y = GraphBottom - reference / peak * (GraphBottom - GraphTop);
-            dc.DrawLine(new Pen(Muted, 1) { DashStyle = DashStyles.Dash }, new(Left, y), new(ActualWidth - Right, y));
+            dc.DrawLine(new Pen(muted, 1) { DashStyle = DashStyles.Dash }, new(Left, y), new(ActualWidth - Right, y));
         }
         foreach(var moment in Moments.Where(m=>m.Time>=Start&&m.Time<=End))
         {
-            var color=moment.Kind==MomentKind.Death?Death:moment.Kind==MomentKind.Assist?Assist:Accent;var x=X(moment.Time);
-            dc.DrawLine(new Pen(color,1),new(x,GraphBottom+4),new(x,MarkerY-9));
-            dc.DrawEllipse((Brush)FindResource("BackgroundBrush"),new Pen(color,1),new(x,MarkerY),9,9);
+            var marker = (Brush)FindResource(MomentGlyph.BrushFor(moment.Kind)); var x = X(moment.Time);
+            dc.DrawLine(new Pen(marker,1),new(x,GraphBottom+4),new(x,MarkerY-9));
+            dc.DrawEllipse((Brush)FindResource("BackgroundBrush"),new Pen(marker,1),new(x,MarkerY),9,9);
             var kind=MomentGlyph.For(moment.Kind);
-            if(TryFindResource("Phosphor."+kind) is Geometry icon){dc.PushTransform(new TranslateTransform(x-6,MarkerY-6));dc.PushTransform(new ScaleTransform(12d/256,12d/256));dc.DrawGeometry(color,null,icon);dc.Pop();dc.Pop();}
+            if(TryFindResource("Phosphor."+kind) is Geometry icon){dc.PushTransform(new TranslateTransform(x-6,MarkerY-6));dc.PushTransform(new ScaleTransform(12d/256,12d/256));dc.DrawGeometry(marker,null,icon);dc.Pop();dc.Pop();}
         }
-        for(int i=0;i<=5;i++){var time=Start+(End-Start)*i/5;Text(dc,Stamp(time-Start),new(Math.Clamp(X(time)-15,0,Math.Max(0,ActualWidth-38)),88),Muted);}
+        for(int i=0;i<=5;i++){var time=Start+(End-Start)*i/5;Text(dc,Stamp(time-Start),new(Math.Clamp(X(time)-15,0,Math.Max(0,ActualWidth-38)),88),muted);}
     }
-    private static string Stamp(double value)=>TimeSpan.FromSeconds(Math.Max(0,value)).ToString(value>=3600?@"hh\:mm\:ss":@"mm\:ss");
+    private string Stamp(double value)
+    {
+        var format = (End - Start) switch
+        {
+            < 2 => @"ss\.ff\s",
+            < 10 => @"ss\.f\s",
+            >= 3600 => @"hh\:mm\:ss",
+            _ => @"mm\:ss"
+        };
+        return TimeSpan.FromSeconds(Math.Max(0, value)).ToString(format, CultureInfo.InvariantCulture);
+    }
     private void Text(DrawingContext dc,string text,Point point,Brush brush)=>dc.DrawText(new FormattedText(text,CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface((FontFamily)FindResource("StudioFont"),FontStyles.Normal,FontWeights.Normal,FontStretches.Normal),10,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip),point);
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
