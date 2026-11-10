@@ -139,6 +139,7 @@ public sealed record Session
     public DateTimeOffset? DeletedAt { get; set; }
     public string[] AudioTracks { get; set; } = [];
     public string Champion { get; set; } = "League of Legends";
+    public string? ChampionId { get; set; }
     public string? Encoder { get; set; }
     public RecordingMode Mode { get; init; }
     public string? RecordingPath { get; set; }

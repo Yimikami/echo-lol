@@ -3,6 +3,17 @@
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"/>
   </shell:WindowChrome.WindowChrome>
+  <Window.Resources>
+    <Style x:Key="ChampionPortrait" TargetType="Image">
+      <Setter Property="Source" Value="{Binding ChampionIcon}"/>
+      <Setter Property="Width" Value="20"/>
+      <Setter Property="Height" Value="20"/>
+      <Setter Property="Margin" Value="0,0,7,0"/>
+      <Setter Property="Stretch" Value="UniformToFill"/>
+      <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
+      <Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers>
+    </Style>
+  </Window.Resources>
   <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Grid x:Name="ShellRoot">
       <Grid.RowDefinitions>
@@ -81,7 +92,7 @@
         <Border Grid.RowSpan="2" Grid.ColumnSpan="3" Height="365" VerticalAlignment="Top" Margin="-23,-14,-19,0"
                 IsHitTestVisible="False" Opacity=".34" Visibility="{Binding Visibility,ElementName=FeaturedPanel}">
           <Border.Background>
-            <ImageBrush ImageSource="{Binding DataContext.Thumbnail,ElementName=FeaturedPanel}" Stretch="UniformToFill"/>
+            <ImageBrush ImageSource="{Binding DataContext.HeroArtwork,ElementName=FeaturedPanel}" Stretch="UniformToFill"/>
           </Border.Background>
           <Border.OpacityMask>
             <LinearGradientBrush StartPoint=".5,0" EndPoint=".5,1">
@@ -144,7 +155,7 @@
               </Grid.ColumnDefinitions>
               <Border CornerRadius="10" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Margin="0,8,0,14" Background="{DynamicResource PanelBrush}">
                 <Border CornerRadius="9">
-                  <Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background>
+                  <Border.Background><ImageBrush ImageSource="{Binding HeroArtwork}" Stretch="UniformToFill"/></Border.Background>
                   <Border CornerRadius="9" VerticalAlignment="Bottom" Padding="9,8" Background="#D20B0D12">
                     <TextBlock Text="{Binding DurationLabel}" FontSize="13" FontWeight="Bold" Foreground="#F8F8FA"/>
                   </Border>
@@ -154,7 +165,10 @@
                 <Border HorizontalAlignment="Left" Background="{DynamicResource NavigationActiveBrush}" Padding="9,4" CornerRadius="5">
                   <TextBlock x:Name="FeaturedLabel" Text="LATEST HIGHLIGHT" Foreground="{DynamicResource NavigationTextBrush}" FontSize="10" FontWeight="Bold"/>
                 </Border>
-                <TextBlock x:Name="FeaturedTitle" Text="{Binding Title}" FontSize="40" FontWeight="Bold" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                <DockPanel Margin="0,4,0,0">
+                  <Image Style="{StaticResource ChampionPortrait}" Width="33" Height="33" Margin="0,0,10,0"/>
+                  <TextBlock x:Name="FeaturedTitle" Text="{Binding Title}" FontSize="40" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
                 <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource SecondaryBrush}" TextTrimming="CharacterEllipsis" FontSize="13" Margin="1,2,0,5"/>
                 <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" Margin="1,0,0,12"/>
                 <Button x:Name="FeaturedPlay" Click="FeaturedClick" HorizontalAlignment="Left" Padding="12,6" MinHeight="37" Style="{StaticResource AccentButton}" AutomationProperties.Name="Play latest recording">
@@ -311,7 +325,10 @@
                       <ColumnDefinition Width="*"/>
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="15" TextTrimming="CharacterEllipsis"/>
+                    <DockPanel>
+                      <Image Style="{StaticResource ChampionPortrait}"/>
+                      <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="15" TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                       <StackPanel Orientation="Horizontal" Visibility="{Binding KillVisibility}" Margin="9,0,0,0">
                         <local:PhosphorIcon Kind="Kill" Width="15" Height="15" Foreground="{DynamicResource KillBrush}"/>
@@ -348,6 +365,7 @@
                   <StackPanel Grid.Column="2">
                     <DockPanel>
                       <TextBlock DockPanel.Dock="Right" Text="{Binding StateLabel}" Visibility="{Binding StateVisibility}" Foreground="{DynamicResource ActivityBrush}" FontSize="10" Margin="5,0,0,0"/>
+                      <Image Style="{StaticResource ChampionPortrait}"/>
                       <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
                     </DockPanel>
                     <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" Margin="0,4,0,8"/>
@@ -415,7 +433,10 @@
                             <Border CornerRadius="5"><Border.Background><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/></Border.Background></Border>
                           </Border>
                           <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,6,0">
-                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="12" FontWeight="Bold"/>
+                            <DockPanel>
+                              <Image Style="{StaticResource ChampionPortrait}" Width="15" Height="15" Margin="0,0,4,0"/>
+                              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="12" FontWeight="Bold"/>
+                            </DockPanel>
                             <TextBlock Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" FontSize="10" Foreground="{DynamicResource SecondaryBrush}" Margin="0,2,0,0"/>
                           </StackPanel>
                           <TextBlock Grid.Column="2" Text="{Binding DurationLabel}" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryBrush}" FontSize="10"/>
@@ -468,7 +489,10 @@
               <local:PhosphorIcon Kind="Back"/>
             </Button>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
-              <TextBlock x:Name="SelectedTitle" Text="Clip" FontSize="27" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+              <DockPanel>
+                <Image Style="{StaticResource ChampionPortrait}" Source="{Binding DataContext.ChampionIcon, ElementName=ReviewDesk}" Width="25" Height="25"/>
+                <TextBlock x:Name="SelectedTitle" Text="Clip" FontSize="27" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+              </DockPanel>
               <TextBlock x:Name="SelectedDetails" Text="Select a recording" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">

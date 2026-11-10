@@ -17,14 +17,14 @@
       </Grid.ColumnDefinitions>
       <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
         <Border.Background>
-          <ImageBrush ImageSource="pack://application:,,,/Echo;component/Assets/game-preview.png" Stretch="UniformToFill" AlignmentX="Right"/>
+          <ImageBrush ImageSource="pack://application:,,,/Echo;component/Assets/setup-jinx.jpg" Stretch="UniformToFill" AlignmentX="Center"/>
         </Border.Background>
         <Grid MouseLeftButtonDown="SetupDrag">
           <Grid.Background>
             <LinearGradientBrush StartPoint="0,1" EndPoint=".62,0">
               <GradientStop Color="#FF100E19" Offset="0"/>
-              <GradientStop Color="#DE201A35" Offset=".48"/>
-              <GradientStop Color="#54161424" Offset="1"/>
+              <GradientStop Color="#72201A35" Offset=".35"/>
+              <GradientStop Color="#30161424" Offset="1"/>
             </LinearGradientBrush>
           </Grid.Background>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="23,24,0,0">

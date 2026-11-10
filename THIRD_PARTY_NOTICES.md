@@ -18,6 +18,8 @@ Bebas Neue is copyright © 2010 Dharma Type, licensed SIL OFL 1.1. The unmodifie
 
 The settings gameplay preview is a frame from Riot Games' official League of Legends “How to Play” / “Earn Gold” video, copyright Riot Games. It is used only as a positioning reference and is not covered by Echo's source-code license. Source URL, timestamp and checksum are retained in `assets/brand/game-preview-provenance.json`.
 
-.NET and WPF are Microsoft projects under the MIT license. This initial package is framework-dependent and requires the .NET 10 Desktop Runtime.
+Champion portraits, splash art, the Jinx onboarding illustration and champion names come from Riot Games' Data Dragon. The bundled illustration is the base Jinx loading art at https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Jinx_0.jpg. The English and Turkish name catalogue comes from Data Dragon 16.22.1. Riot's artwork is outside Echo's source-code license. See https://developer.riotgames.com/docs/lol#data-dragon.
+
+.NET and WPF are Microsoft projects under the MIT license. Official Windows packages include the .NET Desktop Runtime.
 
 Echo isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.

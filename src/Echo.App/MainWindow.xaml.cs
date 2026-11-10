@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -44,6 +45,7 @@ public partial class MainWindow : Window
     public MainWindow(HostPaths paths, bool startRecorder)
     {
         _paths = paths; _startRecorder = startRecorder;
+        _championArtwork = new(paths.Root);
         try { _settings = paths.LoadSettings(); }
         catch (Exception) { _settings = new(); }
         InitializeComponent(); LoadSettingsFields(); SetNav("Clips"); SetFilter();
@@ -71,7 +73,11 @@ public partial class MainWindow : Window
     private void Tick()
     {
         if (App.IsExiting) return;
-        if (++_ticks % 5 == 0) RefreshStatus();
+        if (++_ticks % 5 == 0)
+        {
+            RefreshStatus();
+            if (_artworkPending) RequestChampionArtwork();
+        }
         if (_ticks % 25 == 0)
         {
             if (!CaptureActive() || _matches && LibraryPanel.IsVisible && WindowState != WindowState.Minimized) RefreshCatalog();
@@ -196,6 +202,7 @@ public partial class MainWindow : Window
             _ => _matches ? "All matches" : "All clips"
         };
         RefreshLibraryDashboard(visible, query.Length == 0);
+        RequestChampionArtwork();
         EmptyGallery.Visibility = visible.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _libraryView switch
         {
@@ -324,6 +331,7 @@ public partial class MainWindow : Window
         if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
         OpenEditor();
         ReviewDesk.DataContext = item;
+        RequestChampionArtwork(item);
         SetTimelineMoments(item);
         if (_selected?.Entry == item.Entry && _selected.Clip.Path == item.Clip.Path)
         {
@@ -773,8 +781,29 @@ public partial class MainWindow : Window
 
 }
 
-internal sealed class ClipItem
+internal sealed class ClipItem : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public BitmapSource? ChampionIcon { get; private set; }
+    public BitmapSource? ChampionSplash { get; private set; }
+    public BitmapSource? HeroArtwork => ChampionSplash ?? Thumbnail;
+    internal bool IconRequested { get; set; }
+    internal bool SplashRequested { get; set; }
+
+    internal void SetArtwork(BitmapSource image, bool splash)
+    {
+        if (splash)
+        {
+            ChampionSplash = image;
+            PropertyChanged?.Invoke(this, new(nameof(HeroArtwork)));
+        }
+        else
+        {
+            ChampionIcon = image;
+            PropertyChanged?.Invoke(this, new(nameof(ChampionIcon)));
+        }
+    }
+
     public Session Session { get; }
     public MediaClip Clip { get; }
     public bool WholeMatch { get; }

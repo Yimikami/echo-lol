@@ -96,6 +96,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
     private void Record(EchoSettings settings, CaptureWindow target, LeagueClient league, JsonElement initial)
     {
         var session = new Session { Mode = settings.Mode, RecordingOptions = settings };
+        SetChampion(session, initial);
         var folder = Path.Combine(settings.OutputDirectory, session.Id);
         Directory.CreateDirectory(folder);
         var metadata = Path.Combine(folder, "session.json");
@@ -220,10 +221,26 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         void Add(Moment moment)
         {
             session.Moments.Add(moment); timeline.Add(moment); pending.Add(moment);
-            if (initial.TryGetProperty("allPlayers", out var players) && initial.TryGetProperty("activePlayer", out var active) && active.TryGetProperty("riotId", out var identity))
-                foreach (var p in players.EnumerateArray())
-                    if (p.TryGetProperty("riotId", out var id) && id.GetString() == identity.GetString() && p.TryGetProperty("championName", out var champion)) session.Champion = champion.GetString() ?? session.Champion;
             JsonStore.Write(metadata, session);
+        }
+    }
+
+    private static void SetChampion(Session session, JsonElement snapshot)
+    {
+        if (!snapshot.TryGetProperty("activePlayer", out var active) || active.ValueKind != JsonValueKind.Object
+            || !active.TryGetProperty("riotId", out var identity) || identity.ValueKind != JsonValueKind.String
+            || !snapshot.TryGetProperty("allPlayers", out var players) || players.ValueKind != JsonValueKind.Array) return;
+
+        foreach (var player in players.EnumerateArray())
+        {
+            if (player.ValueKind != JsonValueKind.Object || !player.TryGetProperty("riotId", out var id)
+                || id.ValueKind != JsonValueKind.String || !id.ValueEquals(identity.GetString())) continue;
+            if (player.TryGetProperty("championName", out var name) && name.ValueKind == JsonValueKind.String)
+                session.Champion = name.GetString() ?? session.Champion;
+            if (player.TryGetProperty("rawChampionName", out var raw) && raw.ValueKind == JsonValueKind.String
+                && raw.GetString() is { } value && value.StartsWith("game_character_displayname_", StringComparison.Ordinal))
+                session.ChampionId = value["game_character_displayname_".Length..];
+            return;
         }
     }
 
