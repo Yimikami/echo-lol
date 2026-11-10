@@ -53,45 +53,56 @@ void LibraryFixture(Action<string, string, string, Session> body)
     try { body(root, media, metadata, session); }
     finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
-Test("virtual clip deletion preserves shared match", () => LibraryFixture((root, media, metadata, s) =>
+Test("whole-match Trash can be restored with dependent highlights", () => LibraryFixture((root, media, metadata, s) =>
 {
-    var recycled = LibraryDeletion.Remove(root, s.Id, "one", false, _ => throw new Exception("Must not recycle a shared recording."));
-    var result = JsonStore.Read<Session>(metadata)!; Check(!recycled && File.Exists(media) && result.Clips.Single().Id == "two" && result.RecordingPath == media);
+    var match = new LibraryEntry(s.Id, s.Id, true);
+    LibraryCatalog.SetTrash(root, [match], true);
+    var trashed = JsonStore.Read<Session>(metadata)!;
+    Check(trashed.DeletedAt.HasValue && trashed.Clips.Count == 2 && File.Exists(media));
+    LibraryCatalog.SetTrash(root, [match], false);
+    var restored = JsonStore.Read<Session>(metadata)!;
+    Check(restored.DeletedAt == null && restored.Clips.Count == 2 && restored.RecordingPath == media);
 }));
-Test("match deletion removes dependent virtual clips", () => LibraryFixture((root, media, metadata, s) =>
+Test("failed purge keeps the Trash entry available for retry", () => LibraryFixture((root, media, metadata, s) =>
 {
-    LibraryDeletion.Remove(root, s.Id, s.Id, true, path => File.Move(path, path + ".recycled"));
-    var result = JsonStore.Read<Session>(metadata)!; Check(!File.Exists(media) && File.Exists(media + ".recycled") && result.RecordingPath == null && result.Clips.Count == 0);
+    LibraryCatalog.SetTrash(root, [new(s.Id, s.Id, true)], true);
+    bool failed = false;
+    try { LibraryCatalog.Purge(root, s.Id, _ => throw new IOException("fixture purge failed")); }
+    catch (IOException) { failed = true; }
+    Check(failed && File.Exists(media) && JsonStore.Read<Session>(metadata)?.DeletedAt != null);
 }));
-Test("failed recycling restores the catalog", () => LibraryFixture((root, media, metadata, s) =>
+Test("active and preparing recordings cannot be moved to Trash", () => LibraryFixture((root, media, metadata, s) =>
 {
-    bool failedRecycle = false;
-    try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new IOException("fixture recycling failed")); } catch (IOException) { failedRecycle = true; }
-    var result = JsonStore.Read<Session>(metadata)!; Check(failedRecycle && File.Exists(media) && result.Clips.Count == 2 && result.RecordingPath == media);
+    var match = new LibraryEntry(s.Id, s.Id, true);
+    foreach (var (end, pending) in new (DateTimeOffset?, bool)[] { (null, false), (DateTimeOffset.UtcNow, true) })
+    {
+        s.EndedAt = end;
+        s.PreparationPending = pending;
+        JsonStore.Write(metadata, s);
+        bool blocked = false;
+        try { LibraryCatalog.SetTrash(root, [match], true); }
+        catch (InvalidOperationException) { blocked = true; }
+        Check(blocked && File.Exists(media) && JsonStore.Read<Session>(metadata)?.DeletedAt == null);
+    }
 }));
-Test("active recording cannot be deleted", () => LibraryFixture((root, media, metadata, s) =>
+Test("purging a standalone clip removes its unshared file", () => LibraryFixture((root, media, metadata, s) =>
 {
-    s.EndedAt = null; JsonStore.Write(metadata, s); bool blocked = false;
-    try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new Exception("Must not recycle.")); } catch (InvalidOperationException) { blocked = true; }
-    Check(blocked && File.Exists(media));
-}));
-Test("preparing media cannot race library deletion", () => LibraryFixture((root, media, metadata, s) =>
-{
-    s.PreparationPending = true; JsonStore.Write(metadata, s); bool blocked = false;
-    try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new Exception("Must not recycle.")); } catch (InvalidOperationException) { blocked = true; }
-    Check(blocked && File.Exists(media) && JsonStore.Read<Session>(metadata)!.Clips.Count == 2);
-}));
-Test("standalone clip deletion recycles its file", () => LibraryFixture((root, media, metadata, s) =>
-{
-    s.RecordingPath = null; s.Clips.Clear(); s.Clips.Add(new("standalone", media, 0, 10, "Kill", false)); JsonStore.Write(metadata, s);
-    LibraryDeletion.Remove(root, s.Id, "standalone", false, path => File.Move(path, path + ".recycled"));
+    s.RecordingPath = null;
+    s.Clips.RemoveAll(clip => clip.Id == "two");
+    JsonStore.Write(metadata, s);
+    LibraryCatalog.SetTrash(root, [new(s.Id, "one", false)], true);
+    LibraryCatalog.Purge(root, s.Id, File.Delete);
     Check(!File.Exists(media) && JsonStore.Read<Session>(metadata)!.Clips.Count == 0);
 }));
-Test("deletion rejects media outside its session", () => LibraryFixture((root, media, metadata, s) =>
+Test("purging a match leaves files outside the recording folder intact", () => LibraryFixture((root, media, metadata, s) =>
 {
-    s.RecordingPath = Path.Combine(root, "unrelated.mp4"); JsonStore.Write(metadata, s); bool blocked = false;
-    try { LibraryDeletion.Remove(root, s.Id, s.Id, true, _ => throw new Exception("Must not recycle.")); } catch (InvalidOperationException) { blocked = true; }
-    Check(blocked && File.Exists(media) && JsonStore.Read<Session>(metadata)!.Clips.Count == 2);
+    var unrelated = Path.Combine(root, "unrelated.mp4");
+    File.WriteAllText(unrelated, "unrelated fixture");
+    s.RecordingPath = unrelated;
+    JsonStore.Write(metadata, s);
+    LibraryCatalog.SetTrash(root, [new(s.Id, s.Id, true)], true);
+    LibraryCatalog.Purge(root, s.Id, File.Delete);
+    Check(!File.Exists(media) && !File.Exists(metadata) && File.Exists(unrelated));
 }));
 Test("moment preview includes three second lead in", () => Check(PlaybackNavigation.BeforeEvent(15, 0, 0, 25) == 12));
 Test("moment preview maps replay origin", () => Check(PlaybackNavigation.BeforeEvent(115, 100, 0, 25) == 12));
