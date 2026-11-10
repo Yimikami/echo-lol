@@ -8,13 +8,32 @@ public partial class App : Application
     public static bool IsExiting { get; private set; }
     internal static bool IsShutdownProbe { get; private set; }
     private System.Windows.Threading.DispatcherTimer? _exitMonitor;
+    private ApplicationActivation? _activation;
+    private Window? _startupDialog;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        IsShutdownProbe = e.Args.Contains("--shutdown-probe");
+        bool verifying = IsShutdownProbe || e.Args.Any(arg => arg is "--verify-overlay" or "--verify-ui" or "--verify-behavior");
+        if (!verifying)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _activation = ApplicationActivation.TryAcquire();
+            if (_activation == null)
+            {
+                if (await ApplicationActivation.TryActivateAsync(2000) || (_activation = ApplicationActivation.TryAcquire()) == null)
+                {
+                    Shutdown();
+                    return;
+                }
+            }
+            _ = _activation.ListenAsync(() => Dispatcher.BeginInvoke(ActivateWindow));
+        }
+
         var index = Array.IndexOf(e.Args, "--data-dir");
         var paths = new HostPaths(index >= 0 && index + 1 < e.Args.Length ? e.Args[index + 1] : null);
         var firstRun = !System.IO.File.Exists(paths.Settings);
-        IsShutdownProbe=e.Args.Contains("--shutdown-probe");
         try { ThemeService.Apply(paths.LoadSettings().Theme); } catch { ThemeService.Apply("Dark"); }
         if(e.Args.Contains("--verify-overlay"))
         {
@@ -42,9 +61,32 @@ public partial class App : Application
             Shutdown();
         };
         _exitMonitor.Start();
-        if(firstRun&&!e.Args.Contains("--shutdown-probe")&&!e.Args.Contains("--no-onboarding")){ShutdownMode=ShutdownMode.OnExplicitShutdown;new OnboardingWindow(paths).ShowDialog();}
+        if (firstRun && !IsShutdownProbe && !e.Args.Contains("--no-onboarding"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _startupDialog = new OnboardingWindow(paths);
+            _startupDialog.ShowDialog();
+            _startupDialog = null;
+        }
         var window = new MainWindow(paths, !e.Args.Contains("--no-recorder")); MainWindow = window;
         if (e.Args.Contains("--shutdown-probe")) { ShutdownMode = ShutdownMode.OnExplicitShutdown; await window.StartShutdownProbe(); System.IO.File.WriteAllText(System.IO.Path.Combine(paths.Root,"shutdown-ready"), "ready"); }
         else {ShutdownMode=ShutdownMode.OnLastWindowClose;window.Show();}
     }
+
+    private void ActivateWindow()
+    {
+        if (IsExiting) return;
+        var window = _startupDialog ?? MainWindow;
+        if (window == null) return;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        var dialog = window.OwnedWindows.OfType<Window>().LastOrDefault(w => w.IsVisible);
+        (dialog ?? window).Activate();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _activation?.Dispose();
+        base.OnExit(e);
+    }
+
 }
