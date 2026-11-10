@@ -20,10 +20,41 @@ public partial class MainWindow
         Check("opening Echo resumes capture without pressing Record", startupCommands.SequenceEqual(["status", "arm"]));
         var faultCommands = await VerifyStartupCommands(Path.Combine(output, "fault-profile"), true);
         Check("native faults stay actionable instead of looping", faultCommands.SequenceEqual(["status"]));
+        var activationScope = Guid.NewGuid().ToString("N");
+        using (var activation = ApplicationActivation.TryAcquire(activationScope) ?? throw new InvalidOperationException("Could not acquire the window lock."))
+        {
+            var requests = new System.Collections.Concurrent.ConcurrentQueue<int>();
+            _ = activation.ListenAsync(() => requests.Enqueue(1));
+            var duplicate = await Task.Run(() =>
+            {
+                using var second = ApplicationActivation.TryAcquire(activationScope);
+                return second != null;
+            });
+            Check("a second launcher cannot acquire the window lock", !duplicate);
+            Check("a launcher and a tray request both reach the existing window",
+                await ApplicationActivation.TryActivateAsync(2000, activationScope)
+                && await ApplicationActivation.TryActivateAsync(2000, activationScope));
+            for (int attempt = 0; requests.Count < 2 && attempt < 20; attempt++) await Task.Delay(25);
+            Check("the existing window receives both requests", requests.Count == 2);
+        }
+        Check("older Wukong metadata resolves to Riot's champion ID",
+            ChampionArtwork.Resolve(new Session { Champion = "Wukong" }) == "MonkeyKing");
+        Check("imported videos do not request champion art",
+            ChampionArtwork.Resolve(new Session { Champion = "Imported video" }) == null);
         Check("Phosphor vector assets resolve", TryFindResource("Phosphor.Play") is Geometry);
         Check("settings have no automatic-save status label", FindName("SettingsMessage") == null);
         Check("Manrope is embedded and resolves", FontFamily.GetTypefaces().Any(t => t.TryGetGlyphTypeface(out var glyph) && glyph.FamilyNames.Values.Any(n => n.Contains("Manrope", StringComparison.OrdinalIgnoreCase))));
         RefreshCatalog(true);
+        if (FeaturedPanel.DataContext is ClipItem featured && ChampionArtwork.Resolve(featured.Session) is { } championId
+            && File.Exists(Path.Combine(_paths.Root, "champion-art", championId + "-splash.jpg")))
+        {
+            var splash = await _championArtwork.GetAsync(championId, true, () => false);
+            var icon = await _championArtwork.GetAsync(championId, false, () => false);
+            Check("Riot splash and champion portrait load from the local cache", splash != null && icon != null);
+            featured.SetArtwork(splash!, true);
+            featured.SetArtwork(icon!, false);
+            Check("the featured highlight uses champion art", ReferenceEquals(featured.HeroArtwork, splash));
+        }
         Check("library opens as gallery without forcing the editor", EditorPanel.Visibility == Visibility.Collapsed && LibraryPanel.Visibility == Visibility.Visible);
         if (ClipList.Items.Count > 0)
         {
