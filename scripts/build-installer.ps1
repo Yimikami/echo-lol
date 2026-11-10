@@ -12,8 +12,17 @@ if (!(Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is required to bu
 $package = (Resolve-Path -LiteralPath $PackageDirectory).Path
 $output = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $script = Join-Path $PSScriptRoot '../installer/Echo.iss'
-& $compiler /Qp "/DEchoVersion=$Version" "/DPackageDirectory=$package" "/O$output" $script
-if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)." }
+$previousVersion = $env:ECHO_INSTALLER_VERSION
+$previousPackage = $env:ECHO_INSTALLER_PACKAGE
+try {
+    $env:ECHO_INSTALLER_VERSION = $Version
+    $env:ECHO_INSTALLER_PACKAGE = $package
+    & $compiler /Qp "/O$output" $script
+    if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)." }
+} finally {
+    $env:ECHO_INSTALLER_VERSION = $previousVersion
+    $env:ECHO_INSTALLER_PACKAGE = $previousPackage
+}
 
 $installer = Join-Path $output "Echo-Setup-$Version-x64.exe"
 if (!(Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Setup executable was not produced.' }

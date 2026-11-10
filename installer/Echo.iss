@@ -1,3 +1,9 @@
+#define EchoVersion GetEnv("ECHO_INSTALLER_VERSION")
+#define PackageDirectory GetEnv("ECHO_INSTALLER_PACKAGE")
+#if EchoVersion == "" || PackageDirectory == ""
+  #error Use scripts/build-installer.ps1 to compile the Echo installer.
+#endif
+
 [Setup]
 AppId={{8F87EF57-DBE7-4A6E-9A68-385B5A770C6D}
 AppName=Echo

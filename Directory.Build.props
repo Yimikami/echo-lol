@@ -5,8 +5,8 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Echo contributors</Authors>
-    <Copyright>Copyright © 2026 Echo contributors</Copyright>
+    <Copyright>Copyright Â© 2026 Echo contributors</Copyright>
   </PropertyGroup>
 </Project>
