@@ -210,25 +210,59 @@ public partial class MainWindow
         var dialog = NewMp4Dialog(item.Title + " recap");
         if (dialog.ShowDialog(this) != true || !ValidateExportDestination(dialog.FileName)) return;
         var preset = _inputPreset;
+        IProgress<RecapProgress> progress = new Progress<RecapProgress>(UpdateRecapProgress);
         await RunExport(() =>
         {
-            ClipExport.SaveRecap(item.Session, ranges, preset, dialog.FileName, ExportCache, StopMediaWork, options);
+            ClipExport.SaveRecap(item.Session, ranges, preset, dialog.FileName, ExportCache, StopMediaWork, options, progress.Report);
             return $"Exported {Path.GetFileName(dialog.FileName)}.";
-        });
+        }, recap: true);
     }
 
     private string ExportCache => Path.Combine(_paths.Root, "export-cache");
 
-    private async Task RunExport(Func<string> job)
+    private void UpdateRecapProgress(RecapProgress progress)
+    {
+        if (RecapProgressPanel.Visibility != Visibility.Visible) return;
+        RecapProgressBar.IsIndeterminate = progress.Finalizing;
+        if (progress.Finalizing)
+        {
+            RecapProgressDetail.Text = "Finishing video…";
+            RecapProgressPercent.Text = "";
+            return;
+        }
+
+        var percent = (int)Math.Clamp(progress.RenderedSeconds * 100 / progress.TotalSeconds, 0, 99);
+        RecapProgressBar.Value = percent;
+        RecapProgressPercent.Text = $"{percent}%";
+        RecapProgressDetail.Text = $"Rendering segment {progress.Part} of {progress.PartCount}";
+    }
+
+    private async Task RunExport(Func<string> job, bool recap = false)
     {
         if (_exporting || _libraryBusy || CaptureActive()) return;
         _exporting = true;
-        QuickExportButton.IsEnabled = ExportButton.IsEnabled = false;
+        QuickExportButton.IsEnabled = ExportButton.IsEnabled = RecapButton.IsEnabled = false;
         UpdateSelectionToolbar();
-        try { ShowToast("Exporting…"); ShowToast(await Task.Run(job)); }
+        if (recap)
+        {
+            RecapProgressBar.Value = 0;
+            RecapProgressBar.IsIndeterminate = true;
+            RecapProgressDetail.Text = "Preparing clips…";
+            RecapProgressPercent.Text = "";
+            RecapProgressPanel.Visibility = Visibility.Visible;
+        }
+        else ShowToast("Exporting…");
+        try { ShowToast(await Task.Run(job)); }
         catch (OperationCanceledException) { ShowToast("Export stopped for gameplay."); }
         catch (Exception ex) { ShowToast($"Could not export: {ShortError(ex)}"); }
-        finally { _exporting = false; RefreshStatus(); UpdateSelectionToolbar(); }
+        finally
+        {
+            RecapProgressPanel.Visibility = Visibility.Collapsed;
+            RecapProgressBar.IsIndeterminate = false;
+            _exporting = false;
+            RefreshStatus();
+            UpdateSelectionToolbar();
+        }
     }
 
     private static string SafeName(string title) => string.Join("-", title.Split(Path.GetInvalidFileNameChars())).Trim(' ', '.') is { Length: > 0 } safe

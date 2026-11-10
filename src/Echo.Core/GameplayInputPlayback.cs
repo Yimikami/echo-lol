@@ -44,7 +44,13 @@ public sealed class GameplayInputPlayback
 
     private static bool IsWheel(string control) => control is "WheelUp" or "WheelDown";
 
-    public IReadOnlyList<TimeRange> Pulses(string control) => _pulses.GetValueOrDefault(control) ?? [];
+    public IEnumerable<TimeRange> Pulses(string control, double start, double end)
+    {
+        if (!_pulses.TryGetValue(control, out var ranges)) yield break;
+        int first = LastAtOrBefore(ranges, static range => range.End, start) + 1;
+        for (int index = first; index < ranges.Length && ranges[index].Start < end; index++)
+            yield return ranges[index];
+    }
 
     public HashSet<string> Visible(double time)
     {

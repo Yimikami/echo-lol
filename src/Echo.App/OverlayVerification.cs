@@ -50,7 +50,13 @@ internal static class OverlayVerification
         var custom=new InputOverlayPreset{Layout="Custom"};var customArt=OverlayArtwork.Get(custom);
         Check("custom artwork excludes hidden keys and includes six",customArt.Parts.Any(p=>p.Control=="6")&&!customArt.Parts.Any(p=>p.Control=="A"));
         Check("mouse can be hidden from custom artwork",OverlayArtwork.Get(custom with{ShowMouse=false}).Parts.All(p=>p.Control?.StartsWith("Mouse")!=true));
-        var window=new MainWindow(paths,false);try{await window.VerifyPlaybackOverlay(paths.Root,Check);}finally{window.Close();}
+        var window=new MainWindow(paths,false);
+        try
+        {
+            await window.VerifyPlaybackOverlay(paths.Root,Check);
+            await window.VerifyRecapProgress(paths.Root,Check);
+        }
+        finally { window.Close(); }
         var library = new MainWindow(paths, false);
         try { await library.VerifyLibrarySelection(paths.Root, Check); }
         finally { library.Close(); }
@@ -82,9 +88,33 @@ internal static class OverlayVerification
         await Task.Run(() => MediaTools.RemoveGaps(input, cleaned, [new(.25, 1.2), new(2, 3.15)], session.Encoder, () => false));
         check("removing Alt+Tab gaps preserves both audio tracks", MediaTools.AudioStreamCount(cleaned) == 2 && Math.Abs(MediaTools.Duration(cleaned) - 2.1) < .2);
         var recap = Path.Combine(root, "recap.mp4");
-        await Task.Run(() => ClipExport.SaveRecap(session with { RecordingPath = input }, [new(.25, 1.2), new(2, 3.15)], new(),
-            recap, cache, () => false, new(KeepTracks: true)));
+        var match = session with { RecordingPath = input };
+        var progress = new List<RecapProgress>();
+        await Task.Run(() => ClipExport.SaveRecap(match, [new(.25, 1.2), new(2, 3.15)], new(),
+            recap, cache, () => false, new(KeepTracks: true), progress.Add));
         check("recap concatenates the selected segments and keeps audio tracks", MediaTools.AudioStreamCount(recap) == 2 && Math.Abs(MediaTools.Duration(recap) - 2.1) < .2);
+        check("recap reports encoded video time across segments", progress.Any(p => p.Part == 1 && p.RenderedSeconds > 0)
+            && progress.Any(p => p.Part == 2 && p.RenderedSeconds > .95) && progress[^1].Finalizing
+            && progress.Zip(progress.Skip(1)).All(pair => pair.First.RenderedSeconds <= pair.Second.RenderedSeconds + .00001));
+
+        var single = Path.Combine(root, "recap-single.mp4");
+        await Task.Run(() => ClipExport.SaveRecap(match, [new(1, 2.25)], new(), single, cache, () => false, new(Mute: true)));
+        check("one-segment recap preserves the cut and chosen audio mode",
+            Math.Abs(MediaTools.Duration(single) - 1.25) < .15 && MediaTools.AudioStreamCount(single) == 0);
+
+        bool canceled = false;
+        var aborted = Path.Combine(root, "recap-aborted.mp4");
+        try
+        {
+            await Task.Run(() => ClipExport.SaveRecap(match, [new(.25, 1.2), new(2, 3.15)], new(), aborted, cache,
+                () => Volatile.Read(ref canceled), new(Overlay: false), update => { if (update.Finalizing) Volatile.Write(ref canceled, true); }));
+            check("recap cancellation throws before publishing", false);
+        }
+        catch (OperationCanceledException)
+        {
+            check("canceled recap removes partial video and staging files", !File.Exists(aborted)
+                && !Directory.GetFiles(root, "recap-aborted*.partial").Any() && !Directory.GetDirectories(cache, "recap-*").Any());
+        }
         var imported = LibraryCatalog.Import(Path.Combine(root, "imported"), recap, MediaTools.Duration(recap),
             (video, poster) => MediaTools.Thumbnail(video, poster, .25), () => false);
         check("real MP4 import creates a playable managed match", imported.RecordingPath != recap && File.Exists(imported.RecordingPath) &&
@@ -99,6 +129,33 @@ internal static class OverlayVerification
 }
 public partial class MainWindow
 {
+    internal async Task VerifyRecapProgress(string output, Action<string, bool> check)
+    {
+        var item = _selected ?? throw new InvalidOperationException("A recording is required for the recap progress preview.");
+        OpenRecording(MatchItem(item.Session with { RecordingPath = item.Clip.Path }, Path.GetDirectoryName(item.Clip.Path)!));
+        PrepareVerificationPreview();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var export = RunExport(() => { release.Task.GetAwaiter().GetResult(); return "Recap exported."; }, recap: true);
+        try
+        {
+            check("recap progress stays visible while preparing", RecapProgressPanel.Visibility == Visibility.Visible
+                && RecapProgressBar.IsIndeterminate && !RecapButton.IsEnabled);
+            UpdateRecapProgress(new(2, 4, 9, 24));
+            check("recap shows an elapsed-video percentage and the current segment", !RecapProgressBar.IsIndeterminate
+                && RecapProgressBar.Value == 37 && RecapProgressPercent.Text == "37%"
+                && RecapProgressDetail.Text == "Rendering segment 2 of 4");
+            await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "recap-progress.png"), new(1480, 920));
+            UpdateRecapProgress(new(4, 4, 24, 24, Finalizing: true));
+            check("recap shows a distinct finishing state", RecapProgressBar.IsIndeterminate && RecapProgressDetail.Text == "Finishing video…");
+        }
+        finally
+        {
+            release.SetResult();
+            await export;
+        }
+        check("recap progress closes after export", RecapProgressPanel.Visibility == Visibility.Collapsed);
+    }
+
     internal async Task VerifyPlaybackOverlay(string output,Action<string,bool> check)
     {
         RefreshCatalog(true);ClipList.SelectedIndex=0;PrepareVerificationPreview();await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"player.png"),new(1480,920));UpdatePlaybackInputs(.4);

@@ -13,22 +13,47 @@ internal static class MediaTools
             if (File.Exists(path)) return path;
         return name; // PATH, developer setup
     }
-    internal static string Run(string executable, IEnumerable<string> arguments, int timeoutSeconds = 30, bool includeStandardError = false, Func<bool>? cancel = null)
+    internal static string Run(string executable, IEnumerable<string> arguments, int timeoutSeconds = 30, bool includeStandardError = false,
+        Func<bool>? cancel = null, Action<double>? progress = null)
     {
         var start = new ProcessStartInfo(Find(executable)) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        if (progress != null)
+            foreach (var arg in new[] { "-nostats", "-stats_period", "0.25", "-progress", "pipe:1" }) start.ArgumentList.Add(arg);
         foreach (var arg in arguments) start.ArgumentList.Add(arg);
         using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {executable}.");
         process.PriorityClass = ProcessPriorityClass.BelowNormal;
-        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        var stdout = progress == null ? process.StandardOutput.ReadToEndAsync() : ReadProgressAsync(process.StandardOutput, progress);
+        var stderr = process.StandardError.ReadToEndAsync();
         var elapsed = Stopwatch.StartNew();
-        while (!process.WaitForExit(100))
+        try
         {
-            if (cancel?.Invoke() == true) { process.Kill(true); process.WaitForExit(); throw new OperationCanceledException("Media preparation waits until gameplay ends."); }
-            if (elapsed.Elapsed.TotalSeconds > timeoutSeconds) { process.Kill(true); process.WaitForExit(); throw new TimeoutException($"{executable} timed out."); }
+            while (!process.WaitForExit(100))
+            {
+                if (cancel?.Invoke() == true) { process.Kill(true); process.WaitForExit(); throw new OperationCanceledException("Media preparation waits until gameplay ends."); }
+                if (elapsed.Elapsed.TotalSeconds > timeoutSeconds) { process.Kill(true); process.WaitForExit(); throw new TimeoutException($"{executable} timed out."); }
+            }
+        }
+        finally
+        {
+            if (progress != null && process.HasExited) stdout.GetAwaiter().GetResult();
         }
         if (process.ExitCode != 0) throw new InvalidOperationException($"{executable}: {stderr.GetAwaiter().GetResult()[..Math.Min(1000, stderr.Result.Length)]}");
         return stdout.GetAwaiter().GetResult() + (includeStandardError ? stderr.GetAwaiter().GetResult() : "");
     }
+
+    private static async Task<string> ReadProgressAsync(StreamReader output, Action<double> report)
+    {
+        const string key = "out_time_us=";
+        while (await output.ReadLineAsync().ConfigureAwait(false) is { } line)
+        {
+            if (line.StartsWith(key, StringComparison.Ordinal)
+                && long.TryParse(line.AsSpan(key.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out long timestamp)
+                && timestamp >= 0)
+                report(timestamp / 1_000_000d);
+        }
+        return "";
+    }
+
     private static string Inspect(string path) =>
         Run("ffmpeg", ["-hide_banner", "-threads", "1", "-i", path, "-t", "0", "-f", "null", "-"], includeStandardError: true);
 

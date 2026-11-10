@@ -999,6 +999,19 @@
           </Grid>
         </Border>
       </Grid>
+      <Border x:Name="RecapProgressPanel" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+              Width="304" Margin="24,24,24,88" Padding="15,11" Background="{DynamicResource PanelBrush}"
+              BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Visibility="Collapsed" Panel.ZIndex="29">
+        <StackPanel>
+          <DockPanel>
+            <TextBlock x:Name="RecapProgressPercent" DockPanel.Dock="Right" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
+            <TextBlock Text="Exporting recap" FontWeight="SemiBold"/>
+          </DockPanel>
+          <ProgressBar x:Name="RecapProgressBar" Height="5" Maximum="100" Margin="0,9,0,7"
+                       Foreground="{DynamicResource AccentBrush}" AutomationProperties.Name="Recap export progress"/>
+          <TextBlock x:Name="RecapProgressDetail" Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
+        </StackPanel>
+      </Border>
       <Border x:Name="Toast" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Padding="15,10" Margin="24" Visibility="Collapsed" Panel.ZIndex="30" MaxWidth="460">
         <DockPanel>
           <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Click="DismissToastClick" AutomationProperties.Name="Dismiss notification" Margin="12,0,0,0">
