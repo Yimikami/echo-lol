@@ -90,14 +90,23 @@ internal sealed class GameplayInputCapture : IDisposable
                     var type = Marshal.ReadInt32(_buffer); var data = _buffer + (int)header;
                     if (type == 1)
                     {
-                        var vk = (ushort)Marshal.ReadInt16(data, 6); var up = (Marshal.ReadInt16(data, 2) & 1) != 0;
-                        if (vk == 13) { if (up) _enterDown = false; else if (!_enterDown) { _enterDown = true; _chat = !_chat; Release(); } }
-                        else if (vk == 27 && !up) _chat = false;
-                        else if (!_chat)
+                        var scan = (ushort)Marshal.ReadInt16(data);
+                        var flags = (ushort)Marshal.ReadInt16(data, 2);
+                        var vk = (ushort)Marshal.ReadInt16(data, 6);
+                        bool down = (flags & 1) == 0;
+                        if (WindowsKeyboard.Control(vk, scan, flags) is not { } key) return;
+                        if (key is "Enter" or "NumpadEnter")
                         {
-                            var key = vk switch { 16 or 160 or 161 => "Shift", 17 or 162 or 163 => "Ctrl", 18 or 164 or 165 => "Alt", 32 => "Space", 9 => "Tab",8=>"Backspace",192=>"Backtick",20=>"Caps",37=>"Left",38=>"Up",39=>"Right",40=>"Down",>=112 and <=123=>"F"+(vk-111), >= 48 and <= 90 => ((char)vk).ToString(), _ => "" };
-                            Write(key, !up);
+                            if (!down) { _enterDown = false; Write(key, false); }
+                            else if (!_enterDown)
+                            {
+                                _enterDown = true;
+                                if (!_chat) { Release(); Write(key, true); }
+                                _chat = !_chat;
+                            }
                         }
+                        else if (_chat && key == "Escape" && down) _chat = false;
+                        else if (!_chat) Write(key, down);
                     }
                     else if (type == 0 && !_chat)
                     {

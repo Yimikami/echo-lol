@@ -62,8 +62,10 @@ public partial class MainWindow : Window
         PlaybackActivity.MomentRequested += t=>{SeekTo(Math.Max(PlaybackActivity.Start,t-3));SetPlaying(true);};
         InputPlacementPreview.PlacementChanged += preset => { _inputPreset=preset; PersistInputPreset(); };
         Loaded += async (_, _) => { if (_startRecorder) await EnsureRecorder(true); RefreshCatalog(true); RefreshStatus(); };
+        _inputTimer.Tick += (_, _) => { if (!_seeking) UpdateInputState(Player.Position.TotalSeconds); };
+        StateChanged += (_, _) => RefreshInputTimer();
         _timer.Tick += (_, _) => Tick(); _timer.Start();
-        Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
+        Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _inputTimer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
         _overlayReady=true;
     }
     private void Tick()
@@ -396,6 +398,7 @@ public partial class MainWindow : Window
     private void SetPlaying(bool play)
     {
         _playing = play;
+        RefreshInputTimer();
         if (Player == null) return;
         if (play) { PlayerPoster.Visibility = Visibility.Collapsed; Player.Play(); } else Player.Pause();
         PlayIcon.Kind = play ? "Pause" : "Play";

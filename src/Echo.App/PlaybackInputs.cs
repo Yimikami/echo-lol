@@ -7,7 +7,10 @@ using Echo.Core;
 namespace Echo.App;
 public partial class MainWindow
 {
-    private List<InputSample> _inputSamples=[];
+    private List<InputSample> _inputSamples = [];
+    private GameplayInputPlayback _inputPlayback = new([]);
+    private bool _hasInputData;
+    private readonly System.Windows.Threading.DispatcherTimer _inputTimer = new() { Interval = TimeSpan.FromMilliseconds(45) };
     private bool _overlayReady,_inputDragging;
     private Point _inputGrab;
     private InputOverlayPreset _inputPreset=new();
@@ -28,8 +31,10 @@ public partial class MainWindow
     }
     private void LoadInputData(ClipItem item)
     {
-        _inputSamples=GameplayInputs.Read(item.Session.InputLogPath);
-        PlaybackActivity.Activity=item.Session.InputLogPath is {} path&&File.Exists(path)?InputActivity.Build(_inputSamples,item.Clip,item.Clip.Start,item.Clip.End):[];
+        _inputSamples = GameplayInputs.Read(item.Session.InputLogPath);
+        _inputPlayback = new(_inputSamples);
+        _hasInputData = File.Exists(item.Session.InputLogPath);
+        PlaybackActivity.Activity = _hasInputData ? InputActivity.Build(_inputSamples, item.Clip, item.Clip.Start, item.Clip.End) : [];
         UpdatePlaybackInputs(item.Clip.Start);
     }
     private Rect VideoBounds()
@@ -42,17 +47,38 @@ public partial class MainWindow
         if(!_overlayReady||PlaybackInputs==null)return;
         PlaybackInputs.Preset=_inputPreset;
         PlaybackInputs.Visibility=_selected!=null&&_inputPreset.Enabled?Visibility.Visible:Visibility.Collapsed;
-        if(_selected!=null&&_inputPreset.Enabled)
-        {
-            var at=GameplayInputs.RecordingTime(_selected.Clip,position);PlaybackInputs.HasData=_selected.Session.InputLogPath is {} path&&File.Exists(path);PlaybackInputs.Held=GameplayInputs.Held(_inputSamples,at);PlaybackInputs.Apm=GameplayInputs.Apm(_inputSamples,at);
-        }
+        RefreshInputTimer();
+        UpdateInputState(position);
         var frame=VideoBounds();var maxHeight=frame.Height;var width=Math.Min(frame.Width*_inputPreset.Width,maxHeight*PlaybackInputs.Aspect);var height=width/PlaybackInputs.Aspect;
         PlaybackInputs.Width=InputLayerOutline.Width=width;PlaybackInputs.Height=InputLayerOutline.Height=height;
         var x=frame.X+Math.Clamp(_inputPreset.X*frame.Width,0,Math.Max(0,frame.Width-width));var y=frame.Y+Math.Clamp(_inputPreset.Y*frame.Height,0,Math.Max(0,frame.Height-height));
         foreach(var element in new FrameworkElement[]{PlaybackInputs,InputLayerOutline}){Canvas.SetLeft(element,x);Canvas.SetTop(element,y);}
         Canvas.SetLeft(InputResizeGrip,x+width-8);Canvas.SetTop(InputResizeGrip,y+height-8);Canvas.SetLeft(InputCollapseButton,x+width-28);Canvas.SetTop(InputCollapseButton,y+6);
-        InputCollapseButton.Content=_inputPreset.Collapsed?"+":"−";PlaybackInputs.InvalidateVisual();
+        InputCollapseButton.Content=_inputPreset.Collapsed?"+":"Ã¢Ë†â€™";PlaybackInputs.InvalidateVisual();
         if(PlaybackInputs.Visibility!=Visibility.Visible)ShowInputChrome(false);
+    }
+    private void RefreshInputTimer()
+    {
+        _inputTimer.IsEnabled = _playing && _selected != null && _hasInputData && _inputPreset.Enabled
+            && !_inputPreset.Collapsed && WindowState != WindowState.Minimized;
+    }
+    private void UpdateInputState(double position)
+    {
+        if (_selected == null || !_inputPreset.Enabled) return;
+        var at = GameplayInputs.RecordingTime(_selected.Clip, position);
+        HashSet<string> held = _inputPreset.Collapsed ? [] : _inputPlayback.Visible(at);
+        if (_inputPreset.Layout is "Compact" or "Full")
+        {
+            if (held.Contains("RightShift")) held.Add("Shift");
+            if (held.Contains("RightCtrl")) held.Add("Ctrl");
+            if (held.Contains("RightAlt")) held.Add("Alt");
+        }
+        int apm = _inputPreset.ShowApm ? _inputPlayback.Apm(at) : 0;
+        if (PlaybackInputs.HasData == _hasInputData && PlaybackInputs.Apm == apm && PlaybackInputs.Held.SetEquals(held)) return;
+        PlaybackInputs.HasData = _hasInputData;
+        PlaybackInputs.Held = held;
+        PlaybackInputs.Apm = apm;
+        PlaybackInputs.InvalidateVisual();
     }
     private void ShowInputChrome(bool show){var state=show&&PlaybackInputs.Visibility==Visibility.Visible?Visibility.Visible:Visibility.Collapsed;InputLayerOutline.Visibility=InputResizeGrip.Visibility=InputCollapseButton.Visibility=state;}
     private void InputCanvasHover(object sender,MouseEventArgs e){if(_inputDragging||InputResizeGrip.IsDragging)return;var p=e.GetPosition(InputCanvas);var rect=new Rect(Canvas.GetLeft(PlaybackInputs)-8,Canvas.GetTop(PlaybackInputs)-8,Math.Max(1,PlaybackInputs.ActualWidth+16),Math.Max(1,PlaybackInputs.ActualHeight+16));ShowInputChrome(rect.Contains(p));}

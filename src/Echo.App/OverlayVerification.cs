@@ -28,6 +28,12 @@ internal static class OverlayVerification
         var folder=Path.Combine(paths.Root,"recordings","fixture");Directory.CreateDirectory(folder);var video=Path.Combine(folder,"source.mp4");var log=Path.Combine(folder,"inputs.jsonl");
         if(!File.Exists(video))MediaTools.Run("ffmpeg",["-hide_banner","-v","error","-n","-f","lavfi","-i","testsrc2=size=640x360:rate=30:duration=4","-f","lavfi","-i","sine=frequency=440:duration=4","-c:v","h264_nvenc","-preset","p3","-c:a","aac",video]);
         InputSample[] samples=[new(.2,"Q",true),new(.8,"Q",false),new(1,"MouseRight",true),new(1.5,"MouseRight",false)];File.WriteAllLines(log,samples.Select(s=>JsonSerializer.Serialize(s)));
+        var fastLog = Path.Combine(folder, "fast-inputs.jsonl");
+        File.WriteAllLines(fastLog, new[] { new InputSample(.39, "NumpadEnter", true), new InputSample(.40, "NumpadEnter", false) }.Select(s => JsonSerializer.Serialize(s)));
+        var fastClip = new MediaClip("fast", video, 0, 2, "Short tap", false) { Segments = [new(.35, 0, .08), new(.46, .08, 1.92)] };
+        var fastOverlay = InputOverlayExport.Build(fastClip, 0, 2, fastLog, new() { Layout = "Custom", Keys = ["NumpadEnter"], ShowMouse = false }, 640, 360);
+        Check("fast taps are exported across edited segment boundaries", fastOverlay.Contains("Dialogue: 1,0:00:00.04,0:00:00.08", StringComparison.Ordinal)
+            && fastOverlay.Contains("Dialogue: 1,0:00:00.08,0:00:00.17", StringComparison.Ordinal));
         var poster=Path.Combine(folder,"clip.jpg");MediaTools.Thumbnail(video,poster,.4);
         var session=new Session{Id="fixture",EndedAt=DateTimeOffset.UtcNow,Duration=4,InputLogPath=log,Encoder="obs_nvenc_h264_tex",RecordingOptions=new(){Width=640,Height=360}};
         session.Moments.AddRange([new(1,MomentKind.Kill,.6,.6),new(2,MomentKind.Assist,1.2,1.2),new(3,MomentKind.Death,2.1,2.1)]);
@@ -121,8 +127,8 @@ public partial class MainWindow
         check("pre-game drag stays inside the video",saved.X<placement.Preset.X&&placement.Preset.X<1&&placement.Preset.Y<1);
         _inputPreset=saved;PersistInputPreset();
         var selector=new InputKeysWindow(new(){Layout="Custom"},preset=>{_inputPreset=preset;PersistInputPreset();});
-        selector.SelectKey("A",true);selector.SelectKey("Q",false);selector.SelectMouse(false);
-        check("key selection saves immediately for playback and export",_paths.LoadSettings().InputOverlay.Keys.Contains("A")&&!_paths.LoadSettings().InputOverlay.Keys.Contains("Q")&&!_paths.LoadSettings().InputOverlay.ShowMouse&&PlaybackInputs.Preset.Layout=="Custom");
+        selector.SelectKey("Numpad7",true);selector.SelectKey("A",true);selector.SelectKey("Q",false);selector.SelectMouse(false);
+        check("key selection saves immediately for playback and export",_paths.LoadSettings().InputOverlay.Keys.Contains("A")&&_paths.LoadSettings().InputOverlay.Keys.Contains("Numpad7")&&!_paths.LoadSettings().InputOverlay.Keys.Contains("Q")&&!_paths.LoadSettings().InputOverlay.ShowMouse&&PlaybackInputs.Preset.Layout=="Custom");
         await OverlayVerification.Render((FrameworkElement)selector.Content,Path.Combine(output,"key-selection.png"),new(820,700));selector.Close();
         _inputPreset=new InputOverlayPreset{Layout="Custom",X=saved.X,Y=saved.Y,Width=saved.Width};PersistInputPreset();
         await LoadPlacementBackground();check("preview frame is cached locally from a recording",InputPlacementPreview.BackgroundPath==Path.Combine(_paths.Root,"overlay-preview.png")&&File.Exists(InputPlacementPreview.BackgroundPath));

@@ -26,15 +26,31 @@ public sealed record OverlayColors(string Key,string Pressed,string Text,string 
 public static class OverlayAppearance
 {
     public static IReadOnlyList<string[]> KeyboardRows { get; } = [
-        Enumerable.Range(1,12).Select(i=>"F"+i).ToArray(),
-        ["Backtick","1","2","3","4","5","6","7","8","9","0","Backspace"],
-        ["Tab","Q","W","E","R","T","Y","U","I","O","P"],
-        ["Caps","A","S","D","F","G","H","J","K","L"],
-        ["Shift","Z","X","C","V","B","N","M","Up"],
-        ["Ctrl","Alt","Space","Left","Down","Right"]
+        ["Escape","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"],
+        ["Backtick","1","2","3","4","5","6","7","8","9","0","Minus","Equals","Backspace"],
+        ["Tab","Q","W","E","R","T","Y","U","I","O","P","LeftBracket","RightBracket","Backslash"],
+        ["Caps","A","S","D","F","G","H","J","K","L","Semicolon","Quote","Enter"],
+        ["Shift","IsoBackslash","Z","X","C","V","B","N","M","Comma","Period","Slash","RightShift"],
+        ["Ctrl","LeftWindows","Alt","Space","RightAlt","RightWindows","Menu","RightCtrl"],
+        ["PrintScreen","ScrollLock","Pause","Insert","Home","PageUp","Delete","End","PageDown","Up","Left","Down","Right"],
+        ["NumLock","NumpadDivide","NumpadMultiply","NumpadSubtract","Numpad7","Numpad8","Numpad9","NumpadAdd"],
+        ["Numpad4","Numpad5","Numpad6","Numpad1","Numpad2","Numpad3","NumpadEnter","Numpad0","NumpadDecimal"]
     ];
     public static IReadOnlySet<string> KeyboardKeys { get; }=KeyboardRows.SelectMany(r=>r).ToHashSet(StringComparer.Ordinal);
-    public static string KeyLabel(string key)=>key switch { "Backtick"=>"~","Backspace"=>"BACK","Space"=>"SPACE","Left"=>"LEFT","Right"=>"RIGHT","Up"=>"UP","Down"=>"DOWN",_=>key.ToUpperInvariant() };
+    public static string KeyLabel(string key) => key switch
+    {
+        "Backtick" => "~", "Minus" => "-", "Equals" => "=", "LeftBracket" => "[", "RightBracket" => "]",
+        "Backslash" => "\\", "IsoBackslash" => "< >", "Semicolon" => ";", "Quote" => "'", "Comma" => ",",
+        "Period" => ".", "Slash" => "/", "Escape" => "ESC", "Backspace" => "BACK", "PrintScreen" => "PRT SC",
+        "ScrollLock" => "SCR LK", "NumLock" => "NUM LK", "LeftWindows" => "L WIN", "RightWindows" => "R WIN",
+        "Shift" => "L SHIFT", "Ctrl" => "L CTRL", "Alt" => "L ALT",
+        "RightShift" => "R SHIFT", "RightCtrl" => "R CTRL", "RightAlt" => "R ALT", "PageUp" => "PG UP",
+        "PageDown" => "PG DN", "Insert" => "INS", "Delete" => "DEL", "NumpadDivide" => "NUM /",
+        "NumpadMultiply" => "NUM *", "NumpadSubtract" => "NUM -", "NumpadAdd" => "NUM +",
+        "NumpadDecimal" => "NUM .", "NumpadEnter" => "NUM ENT",
+        _ when key.StartsWith("Numpad", StringComparison.Ordinal) => "NUM " + key[6..],
+        _ => key.ToUpperInvariant()
+    };
     private static readonly OverlayLayout Compact=MakeCompact();
     private static readonly OverlayLayout Full=MakeFull();
     private static readonly OverlayLayout Mouse=MakeMouse();
@@ -55,12 +71,12 @@ public static class OverlayAppearance
         for(int i=0;i<5;i++)Key("ASDFG"[i].ToString(),"ASDFG"[i].ToString(),i+1,2);
         Key("Shift","SHIFT",0,3);for(int i=0;i<5;i++)Key("ZXCVB"[i].ToString(),"ZXCVB"[i].ToString(),i+1,3);
         Key("Ctrl","CTRL",0,4);Key("Alt","ALT",2,4);Key("Space","",3,4,214);
-        var mouse=new OverlayMouse(474,58,210,296);AddMouse(keys,mouse);return new(704,388,keys,mouse);
+        var mouse=new OverlayMouse(474,38,210,296);AddMouse(keys,mouse);return new(704,388,keys,mouse);
     }
     private static OverlayLayout MakeCompact()
     {
         var keys=new List<InputKey>();for(int i=0;i<4;i++){keys.Add(new("QWER"[i].ToString(),"QWER"[i].ToString(),12+i*55,36,60,56));keys.Add(new("ASDF"[i].ToString(),"ASDF"[i].ToString(),i*55,98,60,56));}
-        keys.Add(new("Shift","",0,160,68,56));keys.Add(new("Space","",72,160,153,56));var mouse=new OverlayMouse(244,126,164,170);AddMouse(keys,mouse);return new(420,306,keys,mouse);
+        keys.Add(new("Shift","",0,160,68,56));keys.Add(new("Space","",72,160,153,56));var mouse=new OverlayMouse(244,36,164,170);AddMouse(keys,mouse);return new(420,226,keys,mouse);
     }
     private static OverlayLayout MakeMouse(){var keys=new List<InputKey>();var mouse=new OverlayMouse(10,36,156,226);AddMouse(keys,mouse);return new(180,278,keys,mouse);}
     private static OverlayLayout MakeCustom(InputOverlayPreset preset)
@@ -72,8 +88,9 @@ public static class OverlayAppearance
             int x=12;
             foreach(var id in visible)
             {
-                int width=id=="Space"?180:id.Length>1&&!id.StartsWith('F')?94:74;
-                keys.Add(new(id,KeyLabel(id),x,36+row*68,width,62));x+=width-4;
+                var label = KeyLabel(id);
+                var width = id == "Space" ? 180 : Math.Max(74, 26 + label.Length * 13);
+                keys.Add(new(id,label,x,36+row*68,width,62));x+=width-4;
             }
             maxWidth=Math.Max(maxWidth,x+12);row++;
         }

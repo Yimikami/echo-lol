@@ -129,13 +129,45 @@ Test("input hold state follows releases", () => Check(GameplayInputs.Held([new(1
 Test("cleaned input time maps to the correct original segment boundary", () => { var c = new MediaClip("x", "x", 0, 8, "", false) { Segments = [new(10,0,3),new(20,3,5)] }; Check(GameplayInputs.RecordingTime(c,3) == 20 && GameplayInputs.RecordingTime(c,5) == 22); });
 Test("replay input mapping includes recording origin", () => Check(GameplayInputs.RecordingTime(new("x","x",0,8,"",false,100),2) == 102));
 Test("input loader rejects unrelated controls and interrupted lines", () => { var file=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".jsonl"); try { File.WriteAllLines(file,[JsonSerializer.Serialize(new InputSample(1,"Q",true)),JsonSerializer.Serialize(new InputSample(2,"Unrelated",true)),"{incomplete"]); Check(GameplayInputs.Read(file).Single().Control=="Q"); } finally { File.Delete(file); } });
+Test("short taps stay visible without increasing APM", () =>
+{
+    var inputs = new GameplayInputPlayback([new(1, "Q", true), new(1.012, "Q", false), new(2, "RightShift", true), new(3, "RightShift", false)]);
+    Check(inputs.Visible(1.14).SetEquals(["Q"]) && inputs.Visible(1.18).Count == 0);
+    Check(inputs.Visible(2.9).Contains("RightShift") && inputs.Visible(3).Count == 0);
+    Check(inputs.Apm(1.14) == 1 && inputs.Apm(60.999) == 2 && inputs.Apm(61) == 1);
+});
+Test("rapid scroll pulses keep each action in APM", () =>
+{
+    var inputs = new GameplayInputPlayback([new(1, "WheelUp", true), new(1.01, "WheelUp", true), new(1.1, "WheelUp", false)]);
+    Check(inputs.Apm(1.12) == 2 && inputs.Visible(1.16).Contains("WheelUp") && inputs.Visible(1.18).Count == 0);
+});
+Test("standard keyboard maps separate modifiers, navigation, numpad and ISO punctuation", () =>
+{
+    Check(WindowsKeyboard.Control(13, 0x1C, 2) == "NumpadEnter");
+    Check(WindowsKeyboard.Control(16, 0x36, 0) == "RightShift");
+    Check(WindowsKeyboard.Control(17, 0x1D, 2) == "RightCtrl");
+    Check(WindowsKeyboard.Control(37, 0x4B, 0) == "Numpad4" && WindowsKeyboard.Control(37, 0x4B, 2) == "Left");
+    Check(WindowsKeyboard.Control(223, 0x56, 0) == "IsoBackslash" && WindowsKeyboard.Control(123, 0x58, 0) == "F12");
+    var custom = new InputOverlayPreset { Layout = "Custom", Keys = [.. OverlayAppearance.KeyboardKeys], ShowMouse = false };
+    custom.Validate();
+    var layout = OverlayAppearance.Layout(custom);
+    Check(layout.Keys.Count >= 104 && layout.Keys.All(k => k.X + k.Width <= layout.Width && k.Y + k.Height <= layout.Height));
+});
+Test("compact and extended mice start at the top row", () =>
+{
+    foreach (var name in new[] { "Compact", "Full" })
+    {
+        var layout = OverlayAppearance.Layout(name);
+        Check(layout.Mouse!.Y == layout.Keys.Where(k => OverlayAppearance.KeyboardKeys.Contains(k.Id)).Min(k => k.Y));
+    }
+});
 Test("overlay presets reject invalid sizes and positions",()=>{Throws(()=>new InputOverlayPreset{Width=.01}.Validate());Throws(()=>new InputOverlayPreset{X=double.NaN}.Validate());});
 Test("overlay presets reject unknown layouts",()=>Throws(()=>new InputOverlayPreset{Layout="unknown"}.Validate()));
 Test("all overlay layouts have visible keys within their bounds",()=>{foreach(var name in new[]{"Compact","Full","Mouse"}){var layout=OverlayAppearance.Layout(name);Check(layout.Keys.Count>0&&layout.Keys.All(k=>k.X>=0&&k.Y>=0&&k.X+k.Width<=layout.Width&&k.Y+k.Height<=layout.Height));}});
 Test("reference layouts retain extended keys and blank compact keycaps",()=>{var full=OverlayAppearance.Layout("Full");var compact=OverlayAppearance.Layout("Compact");Check(full.Keys.Any(k=>k.Id=="Backtick")&&full.Keys.Any(k=>k.Id=="Z")&&full.Keys.Any(k=>k.Id=="Space"&&k.Label=="")&&compact.Keys.Count(k=>k.Label==""&&!k.Id.StartsWith("Mouse")&&!k.Id.StartsWith("Wheel"))==2&&GameplayInputs.Allowed.Contains("Backtick"));});
 Test("custom keys omit unused controls and retain six",()=>{var p=new InputOverlayPreset{Layout="Custom"};p.Validate();var layout=OverlayAppearance.Layout(p);Check(layout.Keys.Any(k=>k.Id=="6")&&!layout.Keys.Any(k=>k.Id=="A")&&p.Keys.All(id=>layout.Keys.Any(k=>k.Id==id)));});
 Test("custom keyboard supports A and mouse-free layouts",()=>{var layout=OverlayAppearance.Layout(new InputOverlayPreset{Layout="Custom",Keys=["A","Ctrl","Space"],ShowMouse=false});Check(layout.Mouse==null&&layout.Keys.Select(k=>k.Id).ToHashSet().SetEquals(["A","Ctrl","Space"])&&layout.Keys.All(k=>k.X+k.Width<=layout.Width&&k.Y+k.Height<=layout.Height));});
-Test("custom keys reject duplicates and unknown controls",()=>{Throws(()=>new InputOverlayPreset{Keys=["A","A"]}.Validate());Throws(()=>new InputOverlayPreset{Keys=["Enter"]}.Validate());});
+Test("custom keys reject duplicates and unknown controls",()=>{Throws(()=>new InputOverlayPreset{Keys=["A","A"]}.Validate());Throws(()=>new InputOverlayPreset{Keys=["UnsupportedKey"]}.Validate());});
 Test("empty custom keyboard remains valid",()=>{var p=new InputOverlayPreset{Layout="Custom",Keys=[],ShowMouse=false};p.Validate();Check(OverlayAppearance.Layout(p).Keys.Count==0&&OverlayAppearance.Layout(p).Height==38);});
 Test("activity chart drops presses after the chosen window",()=>{var chart=InputActivity.Build([new(0,"Q",true),new(10,"Q",false),new(20,"W",true)],new("x","x",0,80,"",false),0,80,windowSeconds:60);Check(chart[0].Apm==1&&chart.Single(p=>p.Time==40).Apm==2&&chart[^1].Apm==0);});
 Test("activity chart maps cleaned recording segments",()=>{var clip=new MediaClip("x","x",0,4,"",false){Segments=[new(10,0,2),new(100,2,2)]};var chart=InputActivity.Build([new(11,"Q",true),new(100,"W",true)],clip,0,4);Check(chart[1].Apm==6&&chart[2].Apm==6);});

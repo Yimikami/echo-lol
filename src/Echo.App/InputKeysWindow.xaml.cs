@@ -16,9 +16,14 @@ public partial class InputKeysWindow : Window
     public InputKeysWindow(InputOverlayPreset preset,Action<InputOverlayPreset> changed)
     {
         _preset=preset;_changed=changed;InitializeComponent();
-        foreach(var row in OverlayAppearance.KeyboardRows)
+        for (int index = 0; index < OverlayAppearance.KeyboardRows.Count; index++)
         {
-            var panel=new WrapPanel();KeyRowsPanel.Children.Add(panel);
+            var heading = index switch { 0 => "Keyboard", 6 => "Navigation and system", 7 => "Number pad", _ => null };
+            if (heading != null)
+                KeyRowsPanel.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeights.SemiBold, Margin = new(0, 8, 0, 6) });
+            var row = OverlayAppearance.KeyboardRows[index];
+            var panel = new WrapPanel();
+            KeyRowsPanel.Children.Add(panel);
             foreach(var id in row)
             {
                 var key=new ToggleButton{Content=OverlayAppearance.KeyLabel(id),Tag=id,Style=(Style)FindResource("KeyChoice"),ToolTip=id};
@@ -27,6 +32,8 @@ public partial class InputKeysWindow : Window
             }
         }
         BindFields();
+        MaxWidth = SystemParameters.WorkArea.Width;
+        MaxHeight = SystemParameters.WorkArea.Height;
     }
     private void BindFields()
     {
@@ -49,6 +56,7 @@ public partial class InputKeysWindow : Window
     private void KeyChanged(object sender,RoutedEventArgs e)=>Commit();
     private void MouseChanged(object sender,RoutedEventArgs e)=>Commit();
     private void LeaguePresetClick(object sender,RoutedEventArgs e){_preset=_preset with{Layout="Custom",Keys=new InputOverlayPreset().Keys};BindFields();Commit();}
+    private void SelectAllClick(object sender,RoutedEventArgs e){_preset=_preset with{Layout="Custom",Keys=OverlayAppearance.KeyboardRows.SelectMany(row=>row).ToArray()};BindFields();Commit();}
     private void ClearKeysClick(object sender,RoutedEventArgs e){_preset=_preset with{Layout="Custom",Keys=[]};BindFields();Commit();}
     private void CloseClick(object sender,RoutedEventArgs e)=>Close();
     private void WindowKeyDown(object sender,KeyEventArgs e){if(e.Key==Key.Escape){e.Handled=true;Close();}}
