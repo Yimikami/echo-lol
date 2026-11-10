@@ -1,4 +1,4 @@
-param([string]$OutputDirectory='artifacts/release')
+param([string]$OutputDirectory='artifacts/release', [string]$InstallerVersion)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $repo
@@ -39,6 +39,9 @@ try {
     Download-Verified 'https://github.com/obsproject/obs-studio/releases/download/33.0.0/OBS-Studio-33.0.0-Sources.tar.gz' $obsSource 'c1ae3c98c1bb70ebdced33e894a526fcbbbda9bfd95806970a3fc31f74b08f6c'
     $ffSource=Join-Path $output 'FFmpeg-9.0.2-Sources.tar.xz'
     if(!(Test-Path $ffSource)){Invoke-WebRequest 'https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz' -OutFile $ffSource}
+    if ($InstallerVersion) {
+        & "$PSScriptRoot/build-installer.ps1" -Version $InstallerVersion -PackageDirectory $package -OutputDirectory $output -SmokeTest:($env:CI -eq 'true')
+    }
     $archive=Join-Path $output 'Echo-Windows-x64.zip'
     Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive -Force
     Copy-Item (Join-Path $package 'SOURCE-MANIFEST.json') -Destination $output -Force

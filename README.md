@@ -15,7 +15,9 @@ A lightweight League of Legends recorder for Windows. Keep your plays, edit them
 
 ## Download
 
-[Windows development build](https://github.com/Yimikami/echo-lol/releases/tag/development). Extract the ZIP and run Echo.exe. Setup can be skipped.
+[Download Echo for Windows](https://github.com/Yimikami/echo-lol/releases/latest). Run **Echo-Setup** or extract the portable ZIP and run **Echo.exe**.
+
+[Development builds](https://github.com/Yimikami/echo-lol/releases/tag/development) are also available.
 
 ## Build and run
 
@@ -28,7 +30,7 @@ pwsh ./scripts/build.ps1 -BundleRuntime -ObsDirectory "C:\Program Files\obs-stud
 ./artifacts/app/Echo.exe
 ```
 
-Open Echo and play League. Recording starts automatically; closing the library keeps the recorder running. Choose **Export** while watching a clip or **Select** to export several at once. Enable **Record gameplay inputs** in Highlights before a match to capture APM and the input overlay. Use **Ctrl+Shift+F8** to save a moment manually or change the shortcut in Settings.
+Open Echo and play League. Recording starts automatically; closing the library keeps the recorder running. Choose **Export** while watching a clip or **Select** to export several at once. Enable **Record gameplay inputs** in Highlights before a match to capture APM and the input overlay. Use **Custom keys** in Overlay settings to choose what appears in playback and exports. Use **Ctrl+Shift+F8** to save a moment manually or change the shortcut in Settings.
 
 Fullscreen monitor capture can include everything visible on the game's monitor while League has focus. Window capture isolates the game window. See [capture details](docs/architecture.md).
 

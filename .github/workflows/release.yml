@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   package:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -22,7 +22,19 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/release.ps1
+        run: |
+          if ($env:GITHUB_REF.StartsWith('refs/tags/')) {
+            if ($env:GITHUB_REF_NAME -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+)$') {
+              throw 'Use a stable version tag such as v0.2.0.'
+            }
+            $version = $Matches[1]
+            if ($version -ne ([xml](Get-Content Directory.Build.props -Raw)).Project.PropertyGroup.Version) {
+              throw 'The release tag and application version do not match.'
+            }
+            ./scripts/release.ps1 -InstallerVersion $version
+          } else {
+            ./scripts/release.ps1
+          }
       - uses: actions/upload-artifact@v7
         with:
           name: windows-release
@@ -48,7 +60,14 @@ jobs:
         run: |
           if [[ "$BUILD_REF" == refs/tags/v* ]]; then
             tag="${BUILD_REF#refs/tags/}"
-            gh release create "$tag" release/* --verify-tag --title "Echo $tag" --generate-notes
+            version="$(printf '%s' "$tag" | cut -c2-)"
+            test -s "release/Echo-Setup-$version-x64.exe"
+            {
+              printf '## Download\n\n'
+              printf 'Run **Echo-Setup-%s-x64.exe** on Windows 10 or 11. If you prefer a portable copy, extract **Echo-Windows-x64.zip** and run **Echo.exe**.\n\n' "$version"
+              printf '.NET is included. Recording requires a hardware H.264 encoder.\n\n'
+            } > notes.md
+            gh release create "$tag" release/* --verify-tag --latest --title "Echo $tag" --notes-file notes.md --generate-notes
           else
             tag="development"
             printf 'Automatic Windows development build.\n\nRevision: %s\n\nExtract the ZIP and run Echo.exe. .NET is included. A hardware H.264 encoder is required.\n' "$BUILD_SHA" > notes.md
