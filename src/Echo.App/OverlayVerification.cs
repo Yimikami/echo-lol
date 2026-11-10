@@ -39,15 +39,52 @@ internal static class OverlayVerification
             await Task.Run(()=>ClipExport.Save(clip,.4,2.4,log,session.Encoder,preset,output,Path.Combine(paths.Root,"cache"),()=>false));
             Check(item.Item1+" overlay export has expected duration",Math.Abs(MediaTools.Duration(output)-2)<.1);MediaTools.Run("ffmpeg",["-v","error","-i",output,"-f","null","-"]);Check(item.Item1+" overlay export decodes",true);MediaTools.Thumbnail(output,Path.Combine(paths.Root,item.Item1+".jpg"),.1,960);
         }
+        await VerifyFormattedExports(paths.Root, clip, log, session, Check);
         Check("all exports preserve the source",original.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(video))));
         var custom=new InputOverlayPreset{Layout="Custom"};var customArt=OverlayArtwork.Get(custom);
         Check("custom artwork excludes hidden keys and includes six",customArt.Parts.Any(p=>p.Control=="6")&&!customArt.Parts.Any(p=>p.Control=="A"));
         Check("mouse can be hidden from custom artwork",OverlayArtwork.Get(custom with{ShowMouse=false}).Parts.All(p=>p.Control?.StartsWith("Mouse")!=true));
         var window=new MainWindow(paths,false);try{await window.VerifyPlaybackOverlay(paths.Root,Check);}finally{window.Close();}
+        var library = new MainWindow(paths, false);
+        try { await library.VerifyLibrarySelection(paths.Root, Check); }
+        finally { library.Close(); }
         var skipPaths=new HostPaths(Path.Combine(paths.Root,"skip-profile"));var skip=new OnboardingWindow(skipPaths);skip.VerifySkip(Check);skip.Close();
         var setupPaths=new HostPaths(Path.Combine(paths.Root,"setup-profile"));var setup=new OnboardingWindow(setupPaths);await setup.VerifySetup(paths.Root,Check);setup.Close();
         ThemeService.Apply("Dark");File.WriteAllLines(Path.Combine(paths.Root,"overlay-checks.txt"),checks);
     }
+    private static async Task VerifyFormattedExports(string root, MediaClip clip, string log, Session session, Action<string, bool> check)
+    {
+        var cache = Path.Combine(root, "cache");
+        var input = Path.Combine(root, "separate-source.mp4");
+        MediaTools.Run("ffmpeg", ["-hide_banner", "-v", "error", "-y", "-i", clip.Path, "-f", "lavfi", "-i", "sine=frequency=880:duration=4",
+            "-map", "0:v:0", "-map", "0:a:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", input]);
+        var source = clip with { Path = input };
+        check("separate source has two distinct audio streams", MediaTools.AudioStreamCount(input) == 2);
+        foreach (var (options, size) in new (ExportOptions Options, (int Width, int Height) Size)[]
+        {
+            (new(ExportLayout.Square, .25, KeepTracks: true), (1080, 1080)),
+            (new(ExportLayout.Portrait, .7, TrackGains: [.5, .25]), (1080, 1920)),
+            (new(ExportLayout.PortraitHud, MinimapOnLeft: true, Mute: true), (1080, 1920))
+        })
+        {
+            var file = Path.Combine(root, $"{options.Layout}.mp4");
+            await Task.Run(() => ClipExport.Save(source, .4, 2.4, log, session.Encoder, new(), file, cache, () => false, options));
+            check($"{options.Layout} has correct dimensions and duration", MediaTools.VideoSize(file) == size && Math.Abs(MediaTools.Duration(file) - 2) < .15);
+            check($"{options.Layout} exports the chosen audio mode", MediaTools.AudioStreamCount(file) == (options.Mute ? 0 : options.KeepTracks ? 2 : 1));
+        }
+        var cleaned = Path.Combine(root, "masked-tracks.mp4");
+        await Task.Run(() => MediaTools.RemoveGaps(input, cleaned, [new(.25, 1.2), new(2, 3.15)], session.Encoder, () => false));
+        check("removing Alt+Tab gaps preserves both audio tracks", MediaTools.AudioStreamCount(cleaned) == 2 && Math.Abs(MediaTools.Duration(cleaned) - 2.1) < .2);
+        var recap = Path.Combine(root, "recap.mp4");
+        await Task.Run(() => ClipExport.SaveRecap(session with { RecordingPath = input }, [new(.25, 1.2), new(2, 3.15)], new(),
+            recap, cache, () => false, new(KeepTracks: true)));
+        check("recap concatenates the selected segments and keeps audio tracks", MediaTools.AudioStreamCount(recap) == 2 && Math.Abs(MediaTools.Duration(recap) - 2.1) < .2);
+        var imported = LibraryCatalog.Import(Path.Combine(root, "imported"), recap, MediaTools.Duration(recap),
+            (video, poster) => MediaTools.Thumbnail(video, poster, .25), () => false);
+        check("real MP4 import creates a playable managed match", imported.RecordingPath != recap && File.Exists(imported.RecordingPath) &&
+            MediaTools.VideoSize(imported.RecordingPath!) == MediaTools.VideoSize(recap));
+    }
+
     internal static async Task Render(FrameworkElement root,string file,Size size)
     {
         root.Measure(size);root.Arrange(new Rect(size));root.UpdateLayout();await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);root.Measure(size);root.Arrange(new Rect(size));root.UpdateLayout();

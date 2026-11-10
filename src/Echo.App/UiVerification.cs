@@ -85,6 +85,8 @@ public partial class MainWindow
             probe.BeforeInput.Text = "18"; probe.OutputInput.Text = Path.Combine(testPaths.Root, "recordings"); probe.MicBox.IsChecked = false; probe.SaveSettingsClick(this, new());
             Check("valid settings persist to the selected profile", JsonStore.Read<EchoSettings>(testPaths.Settings)?.BeforeSeconds == 18 && probe.SettingsError.Text.Length == 0);
             probe.DesktopAudioBox.IsChecked = true;
+            probe.SeparateAudioBox.IsChecked = true;
+            Check("separate audio toggle saves immediately", JsonStore.Read<EchoSettings>(testPaths.Settings)?.SeparateAudioTracks == true);
             Check("desktop audio toggle saves without a button", JsonStore.Read<EchoSettings>(testPaths.Settings)?.DesktopAudio == true);
             probe.ModeBox.SelectedIndex = 1;
             Check("entire match selection saves immediately", JsonStore.Read<EchoSettings>(testPaths.Settings)?.Mode == RecordingMode.FullMatch);
@@ -105,6 +107,38 @@ public partial class MainWindow
         finally { probe.Close(); }
         File.WriteAllLines(Path.Combine(output, "checks.txt"), checks);
     }
+    internal async Task VerifyLibrarySelection(string output, Action<string, bool> check)
+    {
+        RefreshCatalog(true);
+        var template = _items.First();
+        _items.Clear();
+        for (int i = 0; i < 65; i++)
+        {
+            var session = template.Session with { Id = $"fixture-{i}", StartedAt = DateTimeOffset.UtcNow.AddSeconds(-i) };
+            var clip = template.Clip with { Id = i.ToString(), Title = $"Clip {i + 1}", Favorite = i % 2 == 0 };
+            _items.Add(new(session, clip, template.Clip.ThumbnailPath));
+        }
+        ApplyFilter();
+        SetSelectionMode(true);
+        _galleryPage = 2;
+        ApplyFilter();
+        SelectPageClick(this, new());
+        check("select this page selects only the final visible item", _selection.Count == 1 && ClipList.SelectedItems.Count == 1);
+        PreviousPageClick(this, new());
+        check("pagination keeps selected IDs on other pages", _selection.Count == 1 && ClipList.SelectedItems.Count == 0);
+        SelectResultsClick(this, new());
+        check("all results selects across all gallery pages", _selection.Count == 65 && ClipList.SelectedItems.Count == 32);
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "library-selection.png"), new(1100, 760));
+        var actionBounds = SelectionActions.TransformToAncestor(LibraryPanel).TransformBounds(new Rect(SelectionActions.RenderSize));
+        check("selection actions stay visible at 1100 pixels", SelectionActions.Visibility == Visibility.Visible && actionBounds.Width > 0 && actionBounds.Right <= LibraryPanel.ActualWidth + 1 &&
+            actionBounds.Bottom <= LibraryPanel.ActualHeight + 1);
+        ClearSelectionClick(this, new());
+        SetSelectionMode(false);
+        check("clearing selection returns to single-click browsing", _selection.Count == 0 && ClipList.SelectionMode == SelectionMode.Single);
+        SeparateAudioBox.IsChecked = true;
+        check("separate audio toggle saves immediately", JsonStore.Read<EchoSettings>(_paths.Settings)?.SeparateAudioTracks == true);
+    }
+
     private void PrepareVerificationPreview()
     {
         if (_selected == null) return;

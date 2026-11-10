@@ -134,5 +134,147 @@ Test("legacy settings receive an overlay preset",()=>{var s=JsonSerializer.Deser
 Test("full keyboard F keys and navigation are permitted controls",()=>Check(GameplayInputs.Allowed.Contains("F12")&&GameplayInputs.Allowed.Contains("Left")&&GameplayInputs.Allowed.Contains("Z")));
 Test("theme selection is validated",()=>Throws(()=>(Settings() with{Theme="unknown"}).Validate()));
 Test("exit request is durable and carries a new identity",()=>{var root=Path.Combine(Path.GetTempPath(),"echo-exit-"+Guid.NewGuid());try{var p=new HostPaths(root);Check(ApplicationExit.Current(p)==null);ApplicationExit.Request(p);var first=ApplicationExit.Current(p);Check(first!=null&&File.Exists(p.StopRequest));ApplicationExit.Request(p);Check(ApplicationExit.Current(p)!=first);}finally{Directory.Delete(root,true);}});
+Test("Riot multikill, ally ace and objective steals are attributed to the active player", () =>
+{
+    var detector = Detector();
+    using var players = JsonDocument.Parse("""{"activePlayer":{"riotId":"Echo#123","riotIdGameName":"Echo"},"allPlayers":[{"riotId":"Echo#123","team":"ORDER"}]}""");
+    detector.Identify(players.RootElement);
+    using var events = Events(
+        new { EventID = 1, EventTime = 15, EventName = "Multikill", KillerName = "Echo#123", KillStreak = 5 },
+        new { EventID = 2, EventTime = 16, EventName = "Ace", Acer = "Ally", AcingTeam = "ORDER" },
+        new { EventID = 3, EventTime = 17, EventName = "BaronKill", KillerName = "Echo#123", Stolen = "True" },
+        new { EventID = 4, EventTime = 18, EventName = "DragonKill", KillerName = "Ally", Assisters = new[] { "Echo" }, Stolen = true },
+        new { EventID = 5, EventTime = 19, EventName = "HeraldKill", KillerName = "Enemy", Stolen = false },
+        new { EventID = 6, EventTime = 20, EventName = "InhibKilled", KillerName = "Echo" },
+        new { EventID = 7, EventTime = 21, EventName = "TurretKilled", KillerName = "Echo" });
+    var moments = detector.Consume(events.RootElement, 21, 19);
+    Check(moments.Select(m => m.Kind).SequenceEqual([MomentKind.MultiKill, MomentKind.Ace, MomentKind.Baron, MomentKind.Dragon, MomentKind.Inhibitor, MomentKind.Turret]));
+    Check(moments[0].Label == "Pentakill" && moments[0].RecordingTime == 13 && moments[2].Label == "Baron steal" && !moments[3].Stolen);
+});
+Test("event-specific windows merge even when a later event needs an earlier lead-in", () =>
+{
+    var settings = (Settings() with { HighlightRules = new() { [MomentKind.Baron] = new(true, 25, 3), [MomentKind.Death] = new(false, 5, 0) } }).FitReplayBuffer();
+    settings.Validate();
+    var replay = new ReplayScheduler(settings);
+    var plan = new MomentPlanner(settings);
+    foreach (var moment in new Moment[] { new(1, MomentKind.Kill, 40, 40), new(2, MomentKind.Baron, 49, 49), new(3, MomentKind.Death, 50, 50) })
+    { replay.Add(moment); plan.Add(moment); }
+    Check(replay.Pending.Single() is { Start: 24, End: 52 } && plan.Ranges.Single().Moments.Count == 2);
+    Check(replay.TakeDue(51) == null && replay.TakeDue(52)?.Moments.Count == 2);
+});
+Test("recap filters events, merges overlap and omits masked periods", () =>
+{
+    var match = new Session { Duration = 90, MaskedRanges = [new(28, 31)],
+        Moments = [new(1, MomentKind.Kill, 25, 25), new(2, MomentKind.Assist, 30, 30), new(3, MomentKind.Death, 75, 75)] };
+    var ranges = MatchReview.RecapRanges(match, new HashSet<MomentKind> { MomentKind.Kill, MomentKind.Assist }, Settings());
+    Check(ranges.Count == 2 && ranges[0].Start == 10 && ranges[0].End < 28 && ranges[1].Start > 31 && ranges[1].End == 38);
+});
+Test("match APM counts keydowns inside the recorded duration", () =>
+    Check(MatchReview.AverageApm(new Session { Duration = 120 }, [new(10, "Q", true), new(11, "Q", false), new(20, "W", true), new(150, "E", true)]) == 1));
+Test("library Trash preserves shared footage and supports batch restore", () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"echo-library-{Guid.NewGuid():N}");
+    try
+    {
+        var (match, path) = ManagedLibraryFixture(root);
+        var one = new LibraryEntry(match.Id, "one", false);
+        var two = new LibraryEntry(match.Id, "two", false);
+        LibraryCatalog.SetTrash(root, [one, two], true);
+        Check(LibraryCatalog.Read(root).Single().Clips.All(c => c.DeletedAt.HasValue));
+        LibraryCatalog.SetTrash(root, [one], false);
+        LibraryCatalog.Purge(root, match.Id, File.Delete);
+        Check(File.Exists(path) && LibraryCatalog.Read(root).Single().Clips.Single().Id == "one");
+        Check(LibraryCatalog.Usage(root) == new LibraryUsage(128, 0));
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+});
+Test("quota cleanup keeps favorite clips and removes only owned old media", () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"echo-quota-{Guid.NewGuid():N}");
+    try
+    {
+        var (protectedMatch, keep) = ManagedLibraryFixture(root);
+        var (_, remove) = ManagedLibraryFixture(root);
+        LibraryCatalog.Edit(root, [new(protectedMatch.Id, "one", false)], (_, c) => c! with { Favorite = true });
+        Check(LibraryCatalog.Manage(root, 128, File.Delete, () => false) == 1);
+        Check(File.Exists(keep) && !File.Exists(remove) && LibraryCatalog.Usage(root).ActiveBytes == 128);
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+});
+Test("backup restores shared media, session metadata and input events to new paths", () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"echo-backup-{Guid.NewGuid():N}");
+    try
+    {
+        var original = Path.Combine(root, "original");
+        var restored = Path.Combine(root, "restored");
+        var (match, _) = ManagedLibraryFixture(original);
+        LibraryCatalog.Edit(original, [new(match.Id, match.Id, true)], (session, _) =>
+        {
+            session.Title = "Training recap";
+            session.AudioTracks = ["Master", "Game"];
+            session.InputLogPath = Path.Combine(LibraryCatalog.Folder(original, match.Id), "inputs.jsonl");
+            File.WriteAllLines(session.InputLogPath, [JsonSerializer.Serialize(new InputSample(4, "Q", true), new JsonSerializerOptions(JsonStore.Options) { WriteIndented = false })]);
+            session.Moments.Add(new(1, MomentKind.MultiKill, 5, 5) { Streak = 2 });
+            return null;
+        });
+        var archive = Path.Combine(root, "echo.zip");
+        LibraryBackup.Save(original, archive, () => false);
+        Check(LibraryBackup.Restore(restored, archive, () => false) == 1);
+        var item = LibraryCatalog.Read(restored).Single();
+        Check(item.Id != match.Id && item.Title == "Training recap" && item.AudioTracks.Length == 2 && item.Moments[0].Label == "Double Kill");
+        Check(File.Exists(item.RecordingPath) && item.Clips.All(c => c.Path == item.RecordingPath) && GameplayInputs.Read(item.InputLogPath).Single().Control == "Q");
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+});
+Test("malicious backup asset paths are rejected without writing outside staging", () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"echo-backup-unsafe-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(root);
+        var archive = Path.Combine(root, "unsafe.zip");
+        using (var zip = System.IO.Compression.ZipFile.Open(archive, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var manifest = zip.CreateEntry("echo-library.json").Open();
+            JsonSerializer.Serialize(manifest, new { Version = 1, Sessions = new[] { new Session { EndedAt = DateTimeOffset.UtcNow, RecordingPath = "../escape.mp4" } } }, JsonStore.Options);
+        }
+        bool refused = false;
+        try { LibraryBackup.Restore(Path.Combine(root, "restored"), archive, () => false); }
+        catch (InvalidDataException) { refused = true; }
+        Check(refused && !File.Exists(Path.Combine(root, "escape.mp4")) && !Directory.EnumerateFileSystemEntries(Path.Combine(root, "restored")).Any());
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+});
+Test("relinking one missing video updates all virtual clips without altering their times", () =>
+{
+    var root = Path.Combine(Path.GetTempPath(), $"echo-relink-{Guid.NewGuid():N}");
+    try
+    {
+        var (match, missing) = ManagedLibraryFixture(root);
+        var replacement = Path.Combine(root, "replacement.mp4");
+        File.Move(missing, replacement);
+        LibraryCatalog.Relink(root, new(match.Id, "one", false), replacement, 20, () => false);
+        var session = LibraryCatalog.Read(root).Single();
+        Check(File.Exists(session.RecordingPath) && session.Clips.All(c => c.Path == session.RecordingPath) &&
+            session.Clips.Select(c => c.Start).SequenceEqual([1d, 3d]) && File.Exists(replacement));
+    }
+    finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+});
+
+(Session, string) ManagedLibraryFixture(string root)
+{
+    var match = new Session { Mode = RecordingMode.FullMatch, Duration = 20, EndedAt = DateTimeOffset.UtcNow };
+    var folder = LibraryCatalog.Folder(root, match.Id);
+    Directory.CreateDirectory(folder);
+    var path = Path.Combine(folder, "match.mp4");
+    File.WriteAllBytes(path, new byte[128]);
+    match.RecordingPath = path;
+    match.Clips.Add(new("one", path, 1, 2, "Kill", true));
+    match.Clips.Add(new("two", path, 3, 4, "Kill", true));
+    JsonStore.Write(Path.Combine(folder, "session.json"), match);
+    return (match, path);
+}
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

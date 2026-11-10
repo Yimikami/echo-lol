@@ -102,7 +102,7 @@
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
-          <RowDefinition Height="42"/>
+          <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid x:Name="LibraryHeading">
           <Grid.ColumnDefinitions>
@@ -140,7 +140,7 @@
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
-          <StackPanel Orientation="Horizontal">
+          <StackPanel x:Name="MomentFilters" Orientation="Horizontal">
             <Button x:Name="FilterAll" Content="All moments" Tag="All" Click="FilterClick" Padding="14,8" Margin="0,0,8,0"/>
             <Button x:Name="FilterKills" Tag="Kill" Click="FilterClick" Padding="15,8" Margin="0,0,8,0">
               <StackPanel Orientation="Horizontal">
@@ -160,14 +160,25 @@
                 <TextBlock Text="Deaths" Margin="7,0,0,0"/>
               </StackPanel>
             </Button>
+            <Button x:Name="MoreEventsButton" Content="Events" Click="MoreEventsClick" Padding="10,8" Margin="8,0,0,0"/>
           </StackPanel>
-          <ComboBox x:Name="SortBox" Grid.Column="1" Width="150" SelectedIndex="0" SelectionChanged="SortChanged" AutomationProperties.Name="Sort clips">
+          <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <ComboBox x:Name="LibraryView" Width="120" SelectedIndex="0" SelectionChanged="LibraryViewChanged" Margin="0,0,8,0" AutomationProperties.Name="Library view">
+              <ComboBoxItem Content="All items"/>
+              <ComboBoxItem Content="Favorites"/>
+              <ComboBoxItem Content="Trash"/>
+              <ComboBoxItem Content="Missing files"/>
+            </ComboBox>
+            <Button x:Name="SelectModeButton" Content="Select" Click="SelectModeClick" Margin="0,0,8,0"/>
+            <Button x:Name="LibraryMenuButton" Content="Library tools" Click="LibraryMenuClick" Margin="0,0,8,0"/>
+            <ComboBox x:Name="SortBox" Width="136" SelectedIndex="0" SelectionChanged="SortChanged" AutomationProperties.Name="Sort clips">
             <ComboBoxItem Content="Newest first"/>
-            <ComboBoxItem Content="Oldest first"/>
-          </ComboBox>
+              <ComboBoxItem Content="Oldest first"/>
+            </ComboBox>
+          </StackPanel>
         </Grid>
         <Grid Grid.Row="2" x:Name="ClipBrowser">
-          <ListBox x:Name="ClipList" SelectionChanged="ClipSelected" SizeChanged="GalleryWidthChanged" Background="Transparent" Foreground="{DynamicResource TextBrush}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="Clip gallery">
+          <ListBox x:Name="ClipList" PreviewMouseLeftButtonDown="GalleryMouseDown" SelectionChanged="ClipSelected" SizeChanged="GalleryWidthChanged" Background="Transparent" Foreground="{DynamicResource TextBrush}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="Clip gallery">
             <ListBox.Resources>
               <sys:Double x:Key="GalleryTileWidth">300</sys:Double>
               <sys:Double x:Key="GalleryThumbnailHeight">168</sys:Double>
@@ -194,6 +205,12 @@
                           <Setter TargetName="Card" Property="Background" Value="#1E2127"/>
                           <Setter TargetName="Card" Property="BorderBrush" Value="#4B5569"/>
                         </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                          <Setter TargetName="Card" Property="Background" Value="{DynamicResource PanelBrush}"/>
+                          <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                          <Setter TargetName="Card" Property="BorderThickness" Value="2"/>
+                          <Setter TargetName="Card" Property="Padding" Value="4"/>
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                           <Setter TargetName="Card" Property="BorderBrush" Value="#C2D4FF"/>
                         </Trigger>
@@ -217,6 +234,22 @@
                     </Border>
                     <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#E20B0D11" CornerRadius="4" Padding="7,4" Margin="9">
                       <TextBlock Text="{Binding DurationLabel}" FontSize="12" Foreground="White"/>
+                    </Border>
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E20B0D11" CornerRadius="4" Padding="6" Margin="9" Visibility="{Binding FavoriteVisibility}">
+                      <local:PhosphorIcon Kind="Bookmark" Width="15" Height="15" Foreground="#FFDA91"/>
+                    </Border>
+                    <Border Background="{DynamicResource AccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="9" Padding="6" CornerRadius="4">
+                      <Border.Style>
+                        <Style TargetType="Border">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected,RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                              <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <local:PhosphorIcon Kind="Check" Width="15" Height="15" Foreground="#14203C"/>
                     </Border>
                     <Border Background="#E3232B38" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9" Padding="7,4" CornerRadius="4" Visibility="{Binding StateVisibility}">
                       <TextBlock Text="{Binding StateLabel}" FontSize="12" Foreground="#F6F8FC"/>
@@ -247,6 +280,7 @@
                       </StackPanel>
                     </StackPanel>
                   </Grid>
+                  <TextBlock Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource SecondaryBrush}" FontSize="12" Margin="2,5,0,0"/>
                   <TextBlock Text="{Binding ShortDate}" Foreground="{DynamicResource SecondaryBrush}" FontSize="12" Margin="2,6,0,0"/>
                 </StackPanel>
               </DataTemplate>
@@ -258,11 +292,18 @@
             <TextBlock x:Name="EmptyList" Text="Keep Echo running and play League. Your kills, assists and deaths will appear here automatically." Style="{StaticResource Hint}" TextAlignment="Center"/>
           </StackPanel>
         </Grid>
-        <Grid Grid.Row="3" Margin="3,7,8,0">
+        <Grid Grid.Row="3" Margin="3,7,8,0" MinHeight="42">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
+          <StackPanel x:Name="SelectionToolbar" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+            <TextBlock x:Name="SelectionCount" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <Button Content="This page" Click="SelectPageClick" Margin="0,0,6,0"/>
+            <Button Content="All results" Click="SelectResultsClick" Margin="0,0,6,0"/>
+            <Button Content="Clear" Click="ClearSelectionClick" Margin="0,0,6,0"/>
+            <Button x:Name="SelectionActions" Content="Actions" Click="SelectionActionsClick" Style="{StaticResource AccentButton}"/>
+          </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal">
             <TextBlock x:Name="PageLabel" Text="Page 1 of 1" FontSize="12" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
             <Button x:Name="PreviousPageButton" Style="{StaticResource IconButton}" Click="PreviousPageClick" ToolTip="Previous page" AutomationProperties.Name="Previous page">
@@ -296,6 +337,8 @@
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <Button x:Name="QuickInputsButton" Style="{StaticResource QuietButton}" Click="TogglePlaybackInputs" ToolTip="Show or hide keyboard and mouse"><local:PhosphorIcon Kind="Keyboard" Width="20" Height="20"/></Button>
+              <Button x:Name="RecapButton" Content="Recap" Style="{StaticResource QuietButton}" Click="RecapClick" Visibility="Collapsed" Margin="0,0,8,0"/>
+              <Button x:Name="ReviewMenuButton" Content="More" Style="{StaticResource QuietButton}" Click="ReviewMenuClick" Margin="0,0,8,0"/>
               <Button x:Name="QuickExportButton" Content="Export" Style="{StaticResource AccentButton}" Click="ExportClick" Margin="0,0,12,0"/>
               <Button x:Name="EditTrimButton" Style="{StaticResource QuietButton}" Click="ToggleTrimClick" Margin="0,0,12,0" AutomationProperties.Name="Toggle trimming">
                 <StackPanel Orientation="Horizontal">
@@ -595,7 +638,12 @@
                     </StackPanel>
                   </DockPanel>
                 </Border>
-                <TextBlock Text="Desktop and microphone are off by default. Desktop audio replaces the separate game source to avoid doubling the sound." Style="{StaticResource Hint}" Margin="0,24,0,0"/>
+                <Border Style="{StaticResource SettingRow}">
+                  <StackPanel>
+                    <CheckBox x:Name="SeparateAudioBox" Content="Keep separate audio tracks"/>
+                    <TextBlock Text="Adjust sources when exporting. Desktop audio includes League when League uses the default playback device." Style="{StaticResource Hint}" Margin="0,7,0,0"/>
+                  </StackPanel>
+                </Border>
               </StackPanel>
               <StackPanel x:Name="HighlightsSettings" Visibility="Collapsed">
                 <Border Style="{StaticResource SettingRow}">
@@ -637,7 +685,7 @@
                     </StackPanel>
                   </Grid>
                 </Border>
-                <TextBlock Text="Clicking an event in the editor starts playback 3 seconds before the action, within the available footage." Style="{StaticResource Hint}" Margin="0,24,0,0"/>
+                <Button Content="Event types and clip lengths" Click="HighlightRulesClick" HorizontalAlignment="Left" Margin="0,17,0,0"/>
                 <Border Style="{StaticResource SettingRow}">
                   <DockPanel>
                     <CheckBox x:Name="RemoveMaskedBox" DockPanel.Dock="Right" IsChecked="True" Style="{StaticResource Switch}" AutomationProperties.Name="Remove Alt Tab gaps from highlights"/>
@@ -670,7 +718,7 @@
                     </DockPanel>
                   </StackPanel>
                 </Border>
-                <TextBlock Text="Deleted video files go to the Windows Recycle Bin. Removing a highlight from a full match keeps the shared recording." Style="{StaticResource Hint}" Margin="0,24,0,0"/>
+                <Button Content="Storage usage and cleanup" Click="StorageToolsClick" HorizontalAlignment="Left" Margin="0,17,0,0"/>
               </StackPanel>
               <StackPanel x:Name="InputSettings" Visibility="Collapsed">
                 <TextBlock Text="Input overlay" FontSize="27" FontWeight="Bold"/>

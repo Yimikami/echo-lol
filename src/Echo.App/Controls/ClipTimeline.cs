@@ -15,6 +15,7 @@ public sealed class ClipTimeline : FrameworkElement
     public double Position { get; set; }
     public IReadOnlyList<ImageSource> Frames { get; set; } = [];
     public IReadOnlyList<(double Time, MomentKind Kind)> Moments { get; set; } = [];
+    public IReadOnlyDictionary<double, string> MomentLabels { get; set; } = new Dictionary<double, string>();
     public event Action<double>? SeekRequested;
     public event Action<double, double>? RangeChanged;
     public event Action<double>? MomentRequested;
@@ -74,13 +75,13 @@ public sealed class ClipTimeline : FrameworkElement
             dc.DrawRoundedRectangle(color, null, new Rect(X(moment.Time) - 2, MarkerY - 6, 4, 12), 2, 2);
             if (X(moment.Time) > lastLabelX + 92)
             {
-                var kind = moment.Kind == MomentKind.Manual ? "Bookmark" : moment.Kind.ToString();
+                var kind = MomentGlyph.For(moment.Kind);
                 if (TryFindResource("Phosphor." + kind) is Geometry icon)
                 {
                     dc.PushTransform(new TranslateTransform(X(moment.Time) + 7, MarkerY - 7)); dc.PushTransform(new ScaleTransform(14d / 256, 14d / 256));
                     dc.DrawGeometry(color, null, icon); dc.Pop(); dc.Pop();
                 }
-                Text(dc, moment.Kind.ToString(), new Point(X(moment.Time) + 25, MarkerY - 8), color); lastLabelX = X(moment.Time);
+                Text(dc, MomentLabels.GetValueOrDefault(moment.Time, moment.Kind.ToString()), new Point(X(moment.Time) + 25, MarkerY - 8), color); lastLabelX = X(moment.Time);
             }
         }
         var play = X(Position);
@@ -115,4 +116,15 @@ public sealed class ClipTimeline : FrameworkElement
         base.OnKeyDown(e);
         if (e.Key is Key.Left or Key.Right) { SeekRequested?.Invoke(Math.Clamp(Position + (e.Key == Key.Right ? 1 : -1) * (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? .1 : 1), 0, Duration)); e.Handled = true; }
     }
+}
+
+internal static class MomentGlyph
+{
+    public static string For(MomentKind kind) => kind switch
+    {
+        MomentKind.Kill or MomentKind.MultiKill => "Kill",
+        MomentKind.Assist or MomentKind.Death => kind.ToString(),
+        MomentKind.Manual => "Bookmark",
+        _ => "Recording"
+    };
 }

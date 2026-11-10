@@ -13,10 +13,6 @@ using System.Windows.Shell;
 using Echo.Core;
 using Echo.Recorder;
 using Microsoft.Win32;
-using RecycleFile = Microsoft.VisualBasic.FileIO.FileSystem;
-using RecycleOption = Microsoft.VisualBasic.FileIO.RecycleOption;
-using RecycleUI = Microsoft.VisualBasic.FileIO.UIOption;
-using RecycleCancel = Microsoft.VisualBasic.FileIO.UICancelOption;
 
 namespace Echo.App;
 
@@ -76,7 +72,8 @@ public partial class MainWindow : Window
         if (++_ticks % 5 == 0) RefreshStatus();
         if (_ticks % 25 == 0)
         {
-            RefreshCatalog();
+            if (!CaptureActive() || _matches && LibraryPanel.IsVisible && WindowState != WindowState.Minimized) RefreshCatalog();
+            ScheduleStorageCleanup();
             if (_startRecorder && DateTimeOffset.UtcNow - _status.UpdatedAt > TimeSpan.FromSeconds(8) && !_reconnecting) _ = EnsureRecorder();
         }
         if (EditorPanel.Visibility != Visibility.Visible || _selected == null || _duration <= 0 || _seeking) return;
@@ -90,7 +87,9 @@ public partial class MainWindow : Window
     }
     private bool CaptureActive()
     {
-        var status = JsonStore.Read<RecorderStatus>(_paths.Status);
+        RecorderStatus? status;
+        try { status = JsonStore.Read<RecorderStatus>(_paths.Status); }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { status = _status; }
         return status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8) && (status.Recording || status.State == "Starting recording");
     }
     private void RefreshStatus()
@@ -109,6 +108,8 @@ public partial class MainWindow : Window
             ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
             ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
             QuickExportButton.IsEnabled=ExportButton.IsEnabled;
+            RecapButton.Visibility = _selected is { WholeMatch: true } match && match.Session.Moments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            RecapButton.IsEnabled = ExportButton.IsEnabled && !_libraryBusy && _selected?.Session.PreparationPending == false;
             ExportButton.ToolTip = CaptureActive() ? "Export is available after the match." : "Save the selected range as a new MP4";
             ExportHint.Text = CaptureActive() ? "Finish your match to export clips." : "Save your selection as a new MP4.";
             DeleteButton.IsEnabled = _selected != null && !_exporting;
@@ -118,11 +119,11 @@ public partial class MainWindow : Window
     }
     private void RefreshCatalog(bool force = false)
     {
-        if (_deleteCandidate != null) return;
+        if (_deleteCandidate != null || _libraryBusy) return;
         try
         {
             if (!Directory.Exists(_settings.OutputDirectory)) { _items.Clear(); ApplyFilter(); return; }
-            var files = Directory.EnumerateDirectories(_settings.OutputDirectory).Take(1000).Select(dir => new FileInfo(Path.Combine(dir, "session.json"))).Where(f => f.Exists).ToArray();
+            var files = Directory.EnumerateDirectories(_settings.OutputDirectory).Where(dir => !Path.GetFileName(dir).StartsWith('.')).Select(dir => new FileInfo(Path.Combine(dir, "session.json"))).Where(f => f.Exists).ToArray();
             var signature = string.Join(";", files.Select(f => $"{f.Directory!.Name}:{f.LastWriteTimeUtc.Ticks}:{f.Length}"));
             if (!force && signature == _catalogSignature) return;
             _catalogSignature = signature; _items.Clear();
@@ -130,14 +131,31 @@ public partial class MainWindow : Window
             {
                 Session? session;
                 try { session = JsonStore.Read<Session>(file.FullName); } catch (Exception e) when (e is IOException or JsonException) { continue; }
-                if (session == null) continue;
-                if (_matches)
+                if (session == null || session.Id != file.Directory!.Name) continue;
+                bool trash = _libraryView == 2;
+                if (session.DeletedAt != null)
                 {
-                    if (session.Mode == RecordingMode.FullMatch && session.RecordingPath is { } path && (File.Exists(path) || session.EndedAt == null)) _items.Add(new(session, new(session.Id, path, 0, session.Duration, "Full match", true), FindMatchPoster(file.DirectoryName!, session)));
+                    if (trash) _items.Add(MatchItem(session, file.DirectoryName!));
+                    continue;
                 }
-                else if (session.EndedAt != null) foreach (var clip in session.Clips) if (!clip.VideoUnavailable && File.Exists(clip.Path)) _items.Add(new(session, clip, clip.ThumbnailPath ?? Path.Combine(file.DirectoryName!, clip.Id + ".jpg")));
+                if (_matches && !trash)
+                {
+                    if (session.Mode == RecordingMode.FullMatch && session.RecordingPath != null)
+                    {
+                        var match = MatchItem(session, file.DirectoryName!);
+                        if (ShowEntry(match)) _items.Add(match);
+                    }
+                    continue;
+                }
+                if (session.EndedAt == null) continue;
+                foreach (var clip in session.Clips)
+                {
+                    var item = new ClipItem(session, clip, clip.ThumbnailPath ?? Path.Combine(file.DirectoryName!, clip.Id + ".jpg"));
+                    if (trash ? clip.DeletedAt != null : clip.DeletedAt == null && ShowEntry(item)) _items.Add(item);
+                }
             }
             _items.Sort((a, b) => b.Session.StartedAt.CompareTo(a.Session.StartedAt)); ApplyFilter();
+            ScheduleStorageCleanup();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ErrorBanner.Text = "Could not open the recording folder: " + e.Message; }
     }
@@ -147,18 +165,26 @@ public partial class MainWindow : Window
         if (ClipList == null || SearchBox == null || SortBox == null) return;
         if (resetPage) _galleryPage = 0;
         var query = SearchBox.Text.Trim();
-        var filtered = _items.Where(i => (_filter == "All" || i.Label.Contains(_filter, StringComparison.OrdinalIgnoreCase)) &&
-            (query.Length == 0 || (i.Title + " " + i.DateLabel + " " + i.Label).Contains(query, StringComparison.OrdinalIgnoreCase)));
+        var filtered = _items.Where(i => (_libraryView >= 2 || _filter == "All" || i.HasEvent(_filter)) &&
+            (query.Length == 0 || $"{i.Title} {i.DateLabel} {i.Subtitle}".Contains(query, StringComparison.OrdinalIgnoreCase)));
         var visible = (SortBox.SelectedIndex == 1 ? filtered.OrderBy(i => i.Session.StartedAt).ThenBy(i => i.Clip.RecordingOrigin + i.Clip.Start) : filtered.OrderByDescending(i => i.Session.StartedAt).ThenByDescending(i => i.Clip.RecordingOrigin + i.Clip.Start)).ToArray();
         var pages = Math.Max(1, (int)Math.Ceiling(visible.Length / (double)GalleryPageSize));
         _galleryPage = Math.Clamp(_galleryPage, 0, pages - 1);
         _bindingGallery = true;
+        _filteredItems = visible;
+        _selection.IntersectWith(visible.Select(i => i.Entry));
         ClipList.ItemsSource = visible.Skip(_galleryPage * GalleryPageSize).Take(GalleryPageSize).ToArray();
         ClipList.SelectedItem = null;
+        if (_selecting)
+            foreach (ClipItem item in ClipList.Items)
+                if (_selection.Contains(item.Entry)) ClipList.SelectedItems.Add(item);
         _bindingGallery = false;
+        UpdateSelectionToolbar();
         LibraryCount.Text = $"{visible.Length} {(_matches ? "matches" : "moments")} ";
         EmptyGallery.Visibility = visible.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyList.Text = _items.Count == 0 ? (_matches ? (_settings.Mode == RecordingMode.FullMatch ? "Your next full match will appear here." : "Choose Entire match in Recording settings to save complete games here.") : "Keep Echo running and play League. Your kills, assists and deaths will appear here automatically.") : "No clips match your search. Try another event or search term.";
+        if (_libraryView >= 1 && visible.Length == 0)
+            EmptyList.Text = _libraryView switch { 1 => "Items you favorite appear here.", 2 => "Your Trash is empty.", _ => "All recording files are available." };
         PageLabel.Text = $"Page {_galleryPage + 1} of {pages}"; PreviousPageButton.IsEnabled = _galleryPage > 0; NextPageButton.IsEnabled = _galleryPage < pages - 1;
         if (visible.Length == 0 && _selected == null) ClearPlayer();
     }
@@ -186,20 +212,39 @@ public partial class MainWindow : Window
     private void ClearPlayer()
     {
         _selected = null; _selectionVersion++; SetPlaying(false); Player.Close(); _duration = 0;
-        Timeline.Duration = 0; Timeline.Frames = []; Timeline.Moments = []; Timeline.InvalidateVisual();
+        Timeline.Duration = 0; Timeline.Frames = []; Timeline.Moments = []; Timeline.MomentLabels = new Dictionary<double, string>(); _apmComparison = null; Timeline.InvalidateVisual();
         PlayerPoster.Source = null; PlayerPoster.Visibility = Visibility.Collapsed; EmptyPlayer.Visibility = Visibility.Visible;
         SelectedTitle.Text = "Keep the moment."; SelectedDetails.Text = "Select a clip to start watching.";
         _updating = true; Seek.Value = 0; _updating = false; TimeLabel.Text = "00:00 / 00:00"; UpdateRange();
     }
     private void ClipSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (_bindingGallery || ClipList.SelectedItem is not ClipItem item) return;
+        if (_bindingGallery) return;
+        if (_selecting)
+        {
+            foreach (ClipItem removed in e.RemovedItems) _selection.Remove(removed.Entry);
+            foreach (ClipItem added in e.AddedItems) _selection.Add(added.Entry);
+            UpdateSelectionToolbar();
+            return;
+        }
+        if (ClipList.SelectedItem is not ClipItem item) return;
+        if (_libraryView >= 2)
+        {
+            SetSelectionMode(true);
+            _selection.Add(item.Entry);
+            ApplyFilter();
+            return;
+        }
         if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
         OpenEditor();
-        if (_selected?.Clip.Id == item.Clip.Id && _selected.Clip.Path == item.Clip.Path) { _selected = item; return; }
+        if (_selected?.Entry == item.Entry && _selected.Clip.Path == item.Clip.Path)
+        {
+            _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Subtitle; return;
+        }
         _selectionVersion++; _selected = item; _duration = 0; SetPlaying(false); Player.Close(); EmptyPlayer.Visibility = Visibility.Collapsed;
         LoadInputData(item);
-        SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Label;
+        BeginApmComparison(item);
+        SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Subtitle;
         Timeline.Frames = item.Thumbnail == null ? [] : [item.Thumbnail]; Timeline.Duration = 0; Timeline.InvalidateVisual();
         PlayerPoster.Source = item.Thumbnail; PlayerPoster.Visibility = item.Thumbnail == null ? Visibility.Collapsed : Visibility.Visible;
         ActionStatus.Text = "Drag the edges to trim. Event previews start 3 seconds before the action.";
@@ -212,7 +257,7 @@ public partial class MainWindow : Window
         _updating = true; Seek.Maximum = _duration;
         Timeline.Duration = _duration; Timeline.SelectionStart = Math.Clamp(_selected.Clip.Start, 0, _duration);
         Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration);
-        Timeline.Moments = _selected.Session.Moments.Select(m => (Time: PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime), m.Kind)).Where(m => m.Time.HasValue).Select(m => (m.Time!.Value, m.Kind)).ToArray();
+        SetTimelineMoments(_selected);
         _updating = false; UpdateRange();
         var first = _selected.Session.Moments.FirstOrDefault(m => PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime) is { } t && t >= Timeline.SelectionStart && t <= Timeline.SelectionEnd);
         SeekTo(first == null ? Timeline.SelectionStart : PlaybackNavigation.BeforeEvent(_selected.Clip, first.RecordingTime, Timeline.SelectionStart, Timeline.SelectionEnd));
@@ -400,9 +445,26 @@ public partial class MainWindow : Window
             else if (_fullscreen) SetFullscreen(false);
             else if (_trimOpen) SetTrimOpen(false);
             else if (EditorPanel.Visibility == Visibility.Visible) BackToLibraryClick(this, e);
+            else if (_selecting) SetSelectionMode(false);
             e.Handled = true; return;
         }
-        if (EditorPanel.Visibility != Visibility.Visible || _deleteCandidate != null) return;
+        if (EditorPanel.Visibility != Visibility.Visible || _deleteCandidate != null)
+        {
+            if (_selecting && LibraryPanel.Visibility == Visibility.Visible && e.Key == Key.A &&
+                Keyboard.Modifiers == ModifierKeys.Control && Keyboard.FocusedElement is not TextBox)
+            {
+                SelectResultsClick(this, e); e.Handled = true;
+            }
+            else if (_selecting && _libraryView != 2 && LibraryPanel.Visibility == Visibility.Visible && e.Key == Key.Delete &&
+                Keyboard.FocusedElement is not (TextBox or ComboBox) && !_libraryBusy && !_exporting)
+            {
+                var items = _filteredItems.Where(item => _selection.Contains(item.Entry)).ToArray();
+                if (items.Length > 0 && items.All(item => item.Session.EndedAt != null && !item.Session.PreparationPending))
+                    _ = TrashItems(items, true);
+                e.Handled = true;
+            }
+            return;
+        }
         for (var node = Keyboard.FocusedElement as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
             if (node is System.Windows.Controls.Primitives.TextBoxBase or ComboBox) return;
         if (e.Key == Key.Space && e.OriginalSource is not Button) PlayClick(this, e);
@@ -419,9 +481,9 @@ public partial class MainWindow : Window
     {
         if (_selected == null || _exporting) return;
         SetPlaying(false); _deleteCandidate = _selected;
-        bool full = _matches;
+        bool full = _selected.WholeMatch;
         DeleteTitle.Text = full ? "Delete this match?" : "Delete this clip?";
-        DeleteDescription.Text = full ? "The match video will move to the Windows Recycle Bin. Highlights that reference this match will also be removed from the library." : _selected.Clip.IsVirtual ? "This highlight will be removed from the library. Your full match recording will be kept." : "The video will move to the Windows Recycle Bin. You can restore the file from there.";
+        DeleteDescription.Text = full ? "The match and its highlights will move to Echo’s Trash. You can restore them from the library." : "You can restore this clip from Echo’s Trash.";
         ConfirmDeleteButton.Content = full ? "Delete match" : "Delete clip"; DeleteOverlay.Visibility = Visibility.Visible; CancelDeleteButton.Focus();
         EditorPanel.IsEnabled = false; Sidebar.IsEnabled = false;
     }
@@ -433,16 +495,9 @@ public partial class MainWindow : Window
         try
         {
             Player.Close(); _selectionVersion++;
-            var full = _matches;
-            await _filmstripLock.WaitAsync();
-            bool recycle;
-            try
-            {
-                recycle = await Task.Run(() => LibraryDeletion.Remove(_settings.OutputDirectory, item.Session.Id, item.Clip.Id, full,
-                    media => RecycleFile.DeleteFile(media, RecycleUI.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, RecycleCancel.ThrowException)));
-            }
-            finally { _filmstripLock.Release(); }
-            _deleting = false; CancelDeleteClick(sender, e); ClearPlayer(); BackToLibraryClick(sender, e); _catalogSignature = ""; RefreshCatalog(true); ShowToast(full ? "Match moved to the Recycle Bin." : recycle ? "Clip moved to the Recycle Bin." : "Highlight removed. The full match is kept.");
+            await Task.Run(() => LibraryCatalog.SetTrash(_settings.OutputDirectory, [item.Entry], true));
+            _deleting = false; CancelDeleteClick(sender, e); ClearPlayer(); BackToLibraryClick(sender, e);
+            _catalogSignature = ""; RefreshCatalog(true); ShowToast(item.WholeMatch ? "Match moved to Trash." : "Clip moved to Trash.");
         }
         catch (Exception ex) { DeleteDescription.Text = "Could not delete: " + ex.Message; }
         finally { _deleting = false; ConfirmDeleteButton.IsEnabled = true; CancelDeleteButton.IsEnabled = true; }
@@ -498,6 +553,9 @@ public partial class MainWindow : Window
     private void SearchChanged(object sender, TextChangedEventArgs e) => ApplyFilter(true);
     private void SetFilter()
     {
+        if (MoreEventsButton != null)
+            MoreEventsButton.Content = Enum.TryParse<MomentKind>(_filter, out var kind) && kind is not (MomentKind.Kill or MomentKind.Assist or MomentKind.Death)
+                ? kind == MomentKind.Manual ? "Manual" : KindName(kind) : "Events";
         foreach (var button in new[] { FilterAll, FilterKills, FilterAssists, FilterDeaths })
         {
             var active = (string)button.Tag == _filter;
@@ -536,21 +594,9 @@ public partial class MainWindow : Window
     private void MaximizeClick(object sender, RoutedEventArgs e) { if (_fullscreen) SetFullscreen(false); else WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; }
     private void CloseClick(object sender, RoutedEventArgs e) => Close();
 
-    private async void ExportClick(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null || _exporting || CaptureActive()) return;
-        var dialog=new SaveFileDialog{Title="Export clip",Filter="MP4 video|*.mp4",FileName=$"Echo-{_selected.Session.StartedAt:yyyyMMdd-HHmm}-{_selected.Clip.Id[..6]}.mp4",AddExtension=true,OverwritePrompt=true};
-        if(dialog.ShowDialog(this)!=true)return;
-        var item=_selected;var start=Timeline.SelectionStart;var end=Timeline.SelectionEnd;var preset=_inputPreset;
-        _exporting=true;QuickExportButton.IsEnabled=ExportButton.IsEnabled=false;
-        try{ShowToast("Exporting clip…");await Task.Run(()=>ClipExport.Save(item.Clip,start,end,item.Session.InputLogPath,item.Session.Encoder,preset,dialog.FileName,Path.Combine(_paths.Root,"export-cache"),()=>_closing||App.IsExiting||CaptureActive()));ShowToast("Exported "+Path.GetFileName(dialog.FileName));}
-        catch(OperationCanceledException){ShowToast("Export stopped. Your original clip is unchanged.");}
-        catch(Exception ex){ShowToast("Could not export: "+ex.Message[..Math.Min(300,ex.Message.Length)]);}
-        finally{_exporting=false;RefreshStatus();}
-    }
     private void LoadSettingsFields()
     {
-        ModeBox.SelectedIndex = _settings.Mode == RecordingMode.Clips ? 0 : 1; GameAudioBox.IsChecked = _settings.GameAudio; DesktopAudioBox.IsChecked = _settings.DesktopAudio; MicBox.IsChecked = _settings.Microphone;
+        ModeBox.SelectedIndex = _settings.Mode == RecordingMode.Clips ? 0 : 1; GameAudioBox.IsChecked = _settings.GameAudio; DesktopAudioBox.IsChecked = _settings.DesktopAudio; MicBox.IsChecked = _settings.Microphone; SeparateAudioBox.IsChecked = _settings.SeparateAudioTracks;
         CaptureMethodBox.SelectedIndex = _settings.CaptureMethod == CaptureMethod.Window ? 0 : 1;
         KillsBox.IsChecked = _settings.CaptureKills; AssistsBox.IsChecked = _settings.CaptureAssists; DeathsBox.IsChecked = _settings.CaptureDeaths;
         ShortcutInput.Text = _settings.ManualShortcut; RemoveMaskedBox.IsChecked = _settings.RemoveMaskedHighlights;
@@ -560,17 +606,24 @@ public partial class MainWindow : Window
         ResolutionBox.SelectedIndex = _settings.Height == 720 ? 0 : 1; FpsBox.SelectedIndex = _settings.Fps == 30 ? 0 : 1; OutputInput.Text = _settings.OutputDirectory;
     }
     private void BrowseClick(object sender, RoutedEventArgs e) { var dialog = new OpenFolderDialog { Title = "Choose recording folder" }; if (dialog.ShowDialog(this) == true) { OutputInput.Text = dialog.FolderName; AutoSave(false); } }
+    private Dictionary<MomentKind, HighlightRule> RulesWithBasicToggles()
+    {
+        var rules = new Dictionary<MomentKind, HighlightRule>(_settings.HighlightRules);
+        foreach (var (kind, enabled) in new[] { (MomentKind.Kill, KillsBox.IsChecked == true),
+                     (MomentKind.Assist, AssistsBox.IsChecked == true), (MomentKind.Death, DeathsBox.IsChecked == true) })
+            if (rules.TryGetValue(kind, out var rule)) rules[kind] = rule with { Enabled = enabled };
+        return rules;
+    }
+
     private void SaveSettingsClick(object sender, RoutedEventArgs e)
     {
         try
         {
             var before = int.Parse(BeforeInput.Text, CultureInfo.InvariantCulture); var after = int.Parse(AfterInput.Text, CultureInfo.InvariantCulture);
-            var buffer = Math.Max(40, before + after + 5);
-            var settings = _settings with { Mode = ModeBox.SelectedIndex == 0 ? RecordingMode.Clips : RecordingMode.FullMatch, CaptureMethod = CaptureMethodBox.SelectedIndex == 0 ? CaptureMethod.Window : CaptureMethod.FullscreenDisplay, GameAudio = GameAudioBox.IsChecked == true,
-                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, RecordInputs = RecordInputsBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
-                CaptureDeaths = DeathsBox.IsChecked == true, BeforeSeconds = before, AfterSeconds = after, BufferSeconds = buffer,
-                BufferMegabytes = Math.Max(128, (int)Math.Ceiling(_settings.BitrateKbps * 1000d / 8 * buffer * 1.3 / 1048576)),
-                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim(),InputOverlay=ReadOverlayFields(),Theme=ThemeBox.SelectedIndex==1?"Light":ThemeBox.SelectedIndex==2?"System":"Dark" };
+            var settings = (_settings with { Mode = ModeBox.SelectedIndex == 0 ? RecordingMode.Clips : RecordingMode.FullMatch, CaptureMethod = CaptureMethodBox.SelectedIndex == 0 ? CaptureMethod.Window : CaptureMethod.FullscreenDisplay, GameAudio = GameAudioBox.IsChecked == true,
+                DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, SeparateAudioTracks = SeparateAudioBox.IsChecked == true, RecordInputs = RecordInputsBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
+                CaptureDeaths = DeathsBox.IsChecked == true, HighlightRules = RulesWithBasicToggles(), BeforeSeconds = before, AfterSeconds = after,
+                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim(),InputOverlay=ReadOverlayFields(),Theme=ThemeBox.SelectedIndex==1?"Light":ThemeBox.SelectedIndex==2?"System":"Dark" }).FitReplayBuffer();
             settings.Validate(); JsonStore.Write(_paths.Settings, settings); _settings = settings;
             _inputPreset=settings.InputOverlay;ThemeService.Apply(settings.Theme);RefreshOverlayPreview();UpdatePlaybackInputs(Player.Position.TotalSeconds);
             SettingsError.Text = ""; _settingsDirty = false; _catalogSignature = "";
@@ -585,10 +638,19 @@ internal sealed class ClipItem
 {
     public Session Session { get; }
     public MediaClip Clip { get; }
-    public string Title => Session.Champion;
+    public bool WholeMatch { get; }
+    public LibraryEntry Entry => new(Session.Id, Clip.Id, WholeMatch);
+    public string Title => (WholeMatch ? Session.Title : Clip.Title) ?? Session.Champion;
+    public bool Favorite => WholeMatch ? Session.Favorite : Clip.Favorite;
+    public string[] Tags => WholeMatch ? Session.Tags : Clip.Tags;
+    public string Subtitle => string.Join(" · ", new[] { Label }.Concat(Tags));
+    public bool Missing => Session.EndedAt != null && !Clip.VideoUnavailable && !string.IsNullOrWhiteSpace(Clip.Path) && !File.Exists(Clip.Path);
+    public Visibility FavoriteVisibility => Favorite ? Visibility.Visible : Visibility.Collapsed;
+    public bool HasEvent(string name) => Events.Any(m => m.Kind.ToString() == name)
+        || Clip.EventIds == null && Label.Contains(name, StringComparison.OrdinalIgnoreCase);
     public string Label => Clip.Label;
-    public bool IsReady => Session.EndedAt != null && !Clip.VideoUnavailable && File.Exists(Clip.Path) && !Clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && (!Session.PreparationPending || Clip.Id == Session.Id);
-    public string StateLabel => Session.EndedAt == null ? "Recording" : !IsReady ? "Preparing…" : "";
+    public bool IsReady => Session.EndedAt != null && !Clip.VideoUnavailable && File.Exists(Clip.Path) && !Clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && (!Session.PreparationPending || WholeMatch);
+    public string StateLabel => Session.EndedAt == null ? "Recording" : Missing ? "File missing" : !IsReady ? "Preparing…" : "";
     public Visibility StateVisibility => StateLabel.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     private IEnumerable<Moment> Events => Session.Moments.Where(m => Clip.EventIds != null ? Clip.EventIds.Contains(m.EventId) : PlaybackNavigation.FileTime(Clip, m.RecordingTime) is { } t && t >= Clip.Start && t <= Clip.End);
     public int KillCount => Events.Count(m => m.Kind == MomentKind.Kill);
@@ -614,5 +676,5 @@ internal sealed class ClipItem
             catch (Exception e) when (e is IOException or NotSupportedException) { return null; }
         }
     }
-    public ClipItem(Session session, MediaClip clip, string? thumbnail) { Session = session; Clip = clip; _thumbnailPath = thumbnail; }
+    public ClipItem(Session session, MediaClip clip, string? thumbnail, bool wholeMatch = false) { Session = session; Clip = clip; _thumbnailPath = thumbnail; WholeMatch = wholeMatch; }
 }

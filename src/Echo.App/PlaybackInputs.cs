@@ -42,7 +42,7 @@ public partial class MainWindow
         if(!_overlayReady||PlaybackInputs==null)return;
         PlaybackInputs.Preset=_inputPreset;
         PlaybackInputs.Visibility=_selected!=null&&_inputPreset.Enabled?Visibility.Visible:Visibility.Collapsed;
-        if(_selected!=null)
+        if(_selected!=null&&_inputPreset.Enabled)
         {
             var at=GameplayInputs.RecordingTime(_selected.Clip,position);PlaybackInputs.HasData=_selected.Session.InputLogPath is {} path&&File.Exists(path);PlaybackInputs.Held=GameplayInputs.Held(_inputSamples,at);PlaybackInputs.Apm=GameplayInputs.Apm(_inputSamples,at);
         }
