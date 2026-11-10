@@ -10,7 +10,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using System.Windows.Shell;
 using Shape = System.Windows.Shapes.Shape;
 using Echo.Core;
 using Echo.Recorder;
@@ -37,9 +36,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _settingsTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private const int GalleryPageSize = 32;
     private string _settingsCategory = "Recording";
-    private WindowState _priorWindowState;
-    private WindowChrome? _priorChrome;
-    private ResizeMode _priorResizeMode;
     private readonly SemaphoreSlim _filmstripLock = new(1, 1);
 
     public MainWindow(HostPaths paths, bool startRecorder)
@@ -48,7 +44,7 @@ public partial class MainWindow : Window
         _championArtwork = new(paths.Root);
         try { _settings = paths.LoadSettings(); }
         catch (Exception) { _settings = new(); }
-        InitializeComponent(); LoadSettingsFields(); SetNav("Clips"); SetFilter();
+        InitializeComponent(); ConfigureDisplayFrame(); LoadSettingsFields(); SetNav("Clips"); SetFilter();
         _settingsTimer.Tick += (_, _) => { _settingsTimer.Stop(); SaveSettingsClick(this, new()); };
         SettingsPanel.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, new SelectionChangedEventHandler((_, e) => { if (e.OriginalSource is ComboBox) AutoSave(false); }));
         SettingsPanel.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((_, _) => AutoSave(false)));
@@ -514,16 +510,11 @@ public partial class MainWindow : Window
     private void VideoClicked(object sender, MouseButtonEventArgs e) { if (e.ClickCount == 2) { SetFullscreen(!_fullscreen); e.Handled = true; } }
     private void SetFullscreen(bool fullscreen)
     {
-        if (fullscreen && _selected == null) return;
+        if (_fullscreen == fullscreen || (fullscreen && _selected == null)) return;
         _fullscreen = fullscreen;
         FullscreenToggleIcon.Kind=fullscreen?"ExitFullscreen":"Fullscreen";
         FullscreenToggleButton.ToolTip=fullscreen?"Exit full screen (Esc)":"Full screen (F)";
-        if (fullscreen)
-        {
-            _priorWindowState = WindowState; _priorChrome = WindowChrome.GetWindowChrome(this); _priorResizeMode = ResizeMode;
-            WindowState = WindowState.Normal; WindowChrome.SetWindowChrome(this, null); ResizeMode = ResizeMode.NoResize; WindowState = WindowState.Maximized;
-        }
-        else { WindowState = WindowState.Normal; ResizeMode = _priorResizeMode; WindowChrome.SetWindowChrome(this, _priorChrome); WindowState = _priorWindowState; }
+        SetPlaybackWindowMode(fullscreen);
         foreach (var element in new UIElement[] { TitleBar, Sidebar, SelectedHeading }) element.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         InspectorColumn.Width = new GridLength(!fullscreen && _trimOpen ? 250 : 0);
         Inspector.Visibility = TrimWorkbench.Visibility = !fullscreen && _trimOpen ? Visibility.Visible : Visibility.Collapsed;

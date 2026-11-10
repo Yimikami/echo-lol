@@ -14,7 +14,7 @@
       <Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers>
     </Style>
   </Window.Resources>
-  <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
+  <Border x:Name="WindowFrame" Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Grid x:Name="ShellRoot">
       <Grid.RowDefinitions>
         <RowDefinition Height="58"/>
@@ -545,7 +545,7 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="2" Margin="19,0,9,0">
+            <Grid x:Name="PlayerControls" Grid.Row="2" Margin="19,0,9,0">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="96"/>
                 <ColumnDefinition Width="*"/>

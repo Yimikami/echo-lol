@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,6 +17,8 @@ public partial class MainWindow
     {
         var checks = new List<string>();
         void Check(string name, bool pass) { if (!pass) throw new InvalidOperationException(name); checks.Add("PASS " + name); }
+        var overscan = WindowDisplay.VisiblePadding(new Rect(-1928, -8, 1936, 1096), new Rect(-1920, 0, 1920, 1040), new DpiScale(1.25, 1.25));
+        Check("maximized chrome compensates for the work area at 125% scaling", overscan == new Thickness(6.4, 6.4, 6.4, 38.4));
         var startupCommands = await VerifyStartupCommands(Path.Combine(output, "startup-profile"), false);
         Check("opening Echo resumes capture without pressing Record", startupCommands.SequenceEqual(["status", "arm"]));
         var faultCommands = await VerifyStartupCommands(Path.Combine(output, "fault-profile"), true);
@@ -66,9 +69,26 @@ public partial class MainWindow
             VolumeSlider.Value = .35; Check("volume controls media volume", Math.Abs(Player.Volume - .35) < .001);
             MuteClick(this, new()); Check("mute toggles playback", Player.IsMuted);
             MuteClick(this, new()); Check("unmute toggles playback", !Player.IsMuted);
-            SetFullscreen(true); Check("fullscreen expands only the player workspace", _fullscreen && Sidebar.Visibility == Visibility.Collapsed && Grid.GetColumnSpan(EditorPanel) == 2 && InspectorColumn.Width.Value == 0);
-            Check("fullscreen uses an icon without a floating text button",FindName("ExitFullscreenButton")==null&&FullscreenToggleIcon.Kind=="ExitFullscreen");
-            SetFullscreen(false); Check("fullscreen restores inspector and timeline", !_fullscreen && Inspector.Visibility == Visibility.Visible && TrimWorkbench.Visibility == Visibility.Visible);
+            ApplyTemplate();
+            var handle = new WindowInteropHelper(this).EnsureHandle();
+            var display = WindowDisplay.Areas(handle) ?? throw new InvalidOperationException("No monitor for the player window.");
+            var windowBounds = WindowDisplay.ClientBounds(handle);
+            SetFullscreen(true);
+            Check("fullscreen expands only the player workspace", _fullscreen && Sidebar.Visibility == Visibility.Collapsed && Grid.GetColumnSpan(EditorPanel) == 2 && InspectorColumn.Width.Value == 0);
+            Check("fullscreen uses an icon without a floating text button", FindName("ExitFullscreenButton") == null && FullscreenToggleIcon.Kind == "ExitFullscreen");
+            Check("fullscreen client matches the native monitor bounds", WindowDisplay.ClientBounds(handle) == display.Monitor);
+            var viewport = new Size(960, 516);
+            var frame = (FrameworkElement)Content;
+            frame.Measure(viewport);
+            frame.Arrange(new Rect(viewport));
+            frame.UpdateLayout();
+            var controls = PlayerControls.TransformToAncestor(frame).TransformBounds(new Rect(PlayerControls.RenderSize));
+            var activity = PlaybackActivityPanel.TransformToAncestor(frame).TransformBounds(new Rect(PlaybackActivityPanel.RenderSize));
+            Check("fullscreen keeps the activity timeline and controls in the compact viewport",
+                controls.Bottom <= viewport.Height && controls.Height >= 50 && activity.Bottom <= controls.Top);
+            SetFullscreen(false);
+            Check("fullscreen restores inspector and timeline", !_fullscreen && Inspector.Visibility == Visibility.Visible && TrimWorkbench.Visibility == Visibility.Visible);
+            Check("fullscreen restores the previous client bounds", WindowDisplay.ClientBounds(handle) == windowBounds);
             var marker = _selected!.Session.Moments.FirstOrDefault(m => m.RecordingTime - _selected.Clip.RecordingOrigin >= Timeline.SelectionStart && m.RecordingTime - _selected.Clip.RecordingOrigin <= Timeline.SelectionEnd);
             if (marker != null)
             {
