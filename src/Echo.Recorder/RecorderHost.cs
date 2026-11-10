@@ -115,6 +115,7 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
             engine.Initialize(settings, Path.Combine(paths.Root, "native"));
             engine.Start(settings, target, folder);
             session.Encoder = engine.Encoder;
+            session.AudioTracks = engine.AudioTracks;
             clock.Start(); recordingOriginTicks = Stopwatch.GetTimestamp() - clock.ElapsedTicks;
             if (settings.RecordInputs)
             {

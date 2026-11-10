@@ -86,6 +86,7 @@ internal static class Program
         using var engine = new ObsEngine(); engine.Initialize(settings, Path.Combine(paths.Root, "native"));
         engine.Start(settings, target, folder, synthetic);
         session.Encoder = engine.Encoder;
+        session.AudioTracks = engine.AudioTracks;
         if (settings.Mode == RecordingMode.FullMatch) session.RecordingPath = Path.Combine(folder, "match.mkv");
         var clock = Stopwatch.StartNew(); using var process = Process.GetCurrentProcess();
         double cpuStart = process.TotalProcessorTime.TotalSeconds;

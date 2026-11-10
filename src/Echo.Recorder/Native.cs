@@ -58,6 +58,7 @@ internal static partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint obs_video_encoder_create(string id, string name, nint settings, nint hotkeys);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint obs_audio_encoder_create(string id, string name, nint settings, nuint mixer, nint hotkeys);
     [LibraryImport(Lib)] internal static partial void obs_encoder_set_video(nint encoder, nint video);
+    [LibraryImport(Lib)] internal static partial void obs_source_set_audio_mixers(nint source, uint mixers);
     [LibraryImport(Lib)] internal static partial void obs_encoder_set_audio(nint encoder, nint audio);
     [LibraryImport(Lib)] internal static partial void obs_encoder_release(nint encoder);
     [LibraryImport(Lib)] internal static partial nint obs_get_video();

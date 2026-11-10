@@ -8,13 +8,17 @@ public sealed class ReplayScheduler(EchoSettings settings)
     public void Add(Moment moment)
     {
         if (!settings.Captures(moment.Kind)) return;
-        var range = new ClipRange(Math.Max(0, moment.RecordingTime - settings.BeforeSeconds), moment.RecordingTime + settings.AfterSeconds, [moment]);
-        if (_pending.Count > 0 && range.Start <= _pending[^1].End)
+        var rule = settings.Rule(moment.Kind);
+        var range = new ClipRange(Math.Max(0, moment.RecordingTime - rule.Before), moment.RecordingTime + rule.After, [moment]);
+        var index = _pending.FindIndex(p => p.End >= range.Start);
+        if (index < 0) index = _pending.Count;
+        while (index < _pending.Count && _pending[index].Start <= range.End)
         {
-            var last = _pending[^1];
-            _pending[^1] = new(Math.Min(last.Start, range.Start), Math.Max(last.End, range.End), [..last.Moments, moment]);
+            var overlap = _pending[index];
+            range = new(Math.Min(overlap.Start, range.Start), Math.Max(overlap.End, range.End), [..overlap.Moments, ..range.Moments]);
+            _pending.RemoveAt(index);
         }
-        else _pending.Add(range);
+        _pending.Insert(index, range);
     }
     public ClipRange? TakeDue(double now, bool force = false)
     {

@@ -6,7 +6,7 @@ namespace Echo.Core;
 [JsonConverter(typeof(JsonStringEnumConverter<RecordingMode>))]
 public enum RecordingMode { Clips, FullMatch }
 [JsonConverter(typeof(JsonStringEnumConverter<MomentKind>))]
-public enum MomentKind { Kill, Assist, Death, Manual }
+public enum MomentKind { Kill, Assist, Death, Manual, MultiKill, Ace, Baron, Dragon, Herald, Turret, Inhibitor }
 [JsonConverter(typeof(JsonStringEnumConverter<CaptureMethod>))]
 public enum CaptureMethod { Window, FullscreenDisplay }
 
@@ -27,6 +27,10 @@ public sealed record EchoSettings
     public bool GameAudio { get; init; } = true;
     public bool DesktopAudio { get; init; }
     public bool Microphone { get; init; }
+    public bool SeparateAudioTracks { get; init; }
+    public long LibraryLimitMegabytes { get; init; }
+    public bool AutoManageLibrary { get; init; }
+    public Dictionary<MomentKind, HighlightRule> HighlightRules { get; init; } = [];
     public bool CaptureKills { get; init; } = true;
     public bool CaptureAssists { get; init; } = true;
     public bool CaptureDeaths { get; init; } = true;
@@ -52,7 +56,14 @@ public sealed record EchoSettings
         if (BitrateKbps is < 2000 or > 50000) throw new ArgumentException("Bitrate must be between 2,000 and 50,000 Kbps.");
         if (BeforeSeconds is < 1 or > 60 || AfterSeconds is < 0 or > 30)
             throw new ArgumentException("Use 1–60 seconds before and 0–30 seconds after an event.");
-        if (BufferSeconds < BeforeSeconds + AfterSeconds + 4 || BufferSeconds > 120)
+        foreach (var (kind, rule) in HighlightRules)
+        {
+            if (!Enum.IsDefined(kind) || rule.Before is < 1 or > 60 || rule.After is < 0 or > 30)
+                throw new ArgumentException("Highlight durations must be 1–60 seconds before and 0–30 seconds after.");
+        }
+        if (LibraryLimitMegabytes is < 0 or > 10_000_000 || AutoManageLibrary && LibraryLimitMegabytes == 0)
+            throw new ArgumentException("Choose a positive storage limit before enabling automatic cleanup.");
+        if (BufferSeconds < RequiredBufferSeconds || BufferSeconds > 120)
             throw new ArgumentException("The buffer must cover the clip plus a four-second safety margin, up to 120 seconds.");
         if (BufferMegabytes is < 32 or > 512) throw new ArgumentException("Buffer memory must be 32–512 MB.");
         // Reserve headroom for variable packet sizes, audio and keyframe boundaries.
@@ -63,24 +74,56 @@ public sealed record EchoSettings
             throw new ArgumentException("Choose an absolute recording directory.");
         if (Encoder is not ("auto" or "nvenc" or "amf" or "qsv")) throw new ArgumentException("Choose a supported hardware encoder.");
     }
-    public bool Captures(MomentKind kind) => kind switch
+    public HighlightRule Rule(MomentKind kind) => HighlightRules.TryGetValue(kind, out var rule) ? rule
+        : new(kind switch
+        {
+            MomentKind.Kill => CaptureKills,
+            MomentKind.Assist => CaptureAssists,
+            MomentKind.Death => CaptureDeaths,
+            _ => true
+        }, BeforeSeconds, AfterSeconds);
+    public bool Captures(MomentKind kind) => Rule(kind).Enabled;
+    [JsonIgnore]
+    public int RequiredBufferSeconds => Math.Max(BeforeSeconds + AfterSeconds,
+        HighlightRules.Values.Where(rule => rule.Enabled).Select(rule => rule.Before + rule.After).DefaultIfEmpty().Max()) + 4;
+
+    public EchoSettings FitReplayBuffer()
     {
-        MomentKind.Kill => CaptureKills, MomentKind.Assist => CaptureAssists,
-        MomentKind.Death => CaptureDeaths, _ => true
-    };
+        int seconds = Math.Max(40, RequiredBufferSeconds + 1);
+        int megabytes = Math.Max(128, (int)Math.Ceiling(BitrateKbps * 1000d / 8 * seconds * 1.3 / 1048576));
+        return this with { BufferSeconds = seconds, BufferMegabytes = megabytes };
+    }
 }
 
-public sealed record Moment(int EventId, MomentKind Kind, double GameTime, double RecordingTime);
+public sealed record HighlightRule(bool Enabled, int Before, int After);
+public sealed record Moment(int EventId, MomentKind Kind, double GameTime, double RecordingTime)
+{
+    public int Streak { get; init; }
+    public bool Stolen { get; init; }
+    public string? Note { get; init; }
+    [JsonIgnore]
+    public string Label => Kind switch
+    {
+        MomentKind.MultiKill => Streak switch { 2 => "Double Kill", 3 => "Triple Kill", 4 => "Quadra Kill", 5 => "Pentakill", _ => "Multikill" },
+        MomentKind.Manual when !string.IsNullOrWhiteSpace(Note) => Note,
+        _ => Stolen ? $"{Kind} steal" : Kind.ToString()
+    };
+}
 public sealed record ClipRange(double Start, double End, List<Moment> Moments)
 {
     public double Duration => End - Start;
-    public string Label => string.Join(" · ", Moments.GroupBy(m => m.Kind).Select(g => g.Count() == 1 ? g.Key.ToString() : $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}s"));
+    public string Label => string.Join(" · ", Moments.GroupBy(m => m.Label)
+        .Select(group => group.Count() == 1 ? group.Key : $"{group.Count()} × {group.Key}"));
 }
 public sealed record MediaSegment(double RecordingStart, double FileStart, double Duration);
 public sealed record TimeRange(double Start, double End) { public double Duration => Math.Max(0, End - Start); }
 public sealed record MediaClip(string Id, string Path, double Start, double End, string Label, bool IsVirtual, double RecordingOrigin = 0)
 {
     public List<MediaSegment> Segments { get; init; } = [];
+    public string? Title { get; init; }
+    public bool Favorite { get; init; }
+    public string[] Tags { get; init; } = [];
+    public DateTimeOffset? DeletedAt { get; init; }
     public int[]? EventIds { get; init; }
     public bool VideoUnavailable { get; init; }
     public string? ThumbnailPath { get; init; }
@@ -90,6 +133,11 @@ public sealed record Session
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public DateTimeOffset StartedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? EndedAt { get; set; }
+    public string? Title { get; set; }
+    public bool Favorite { get; set; }
+    public string[] Tags { get; set; } = [];
+    public DateTimeOffset? DeletedAt { get; set; }
+    public string[] AudioTracks { get; set; } = [];
     public string Champion { get; set; } = "League of Legends";
     public string? Encoder { get; set; }
     public RecordingMode Mode { get; init; }
@@ -134,12 +182,25 @@ public sealed record RecorderStatus
 public static class JsonStore
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    public static T? Read<T>(string path) => File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options) : default;
+    public static T? Read<T>(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonSerializer.Deserialize<T>(stream, Options);
+        }
+        catch (FileNotFoundException) { return default; }
+        catch (DirectoryNotFoundException) { return default; }
+    }
     public static void Write<T>(string path, T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(value, Options));
-        File.Move(temp, path, true);
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(value, Options));
+            File.Move(temp, path, true);
+        }
+        finally { File.Delete(temp); }
     }
 }

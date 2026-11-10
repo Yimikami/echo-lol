@@ -7,7 +7,9 @@ namespace Echo.Recorder;
 
 internal sealed class ObsEngine : IDisposable
 {
-    private nint _video, _audio, _output, _scene, _gameAudio, _capture;
+    private readonly List<nint> _audio = [];
+    public string[] AudioTracks { get; private set; } = [];
+    private nint _video, _output, _scene, _gameAudio, _capture;
     private readonly List<nint> _sources = [];
     private bool _started, _com;
     private Native.RenderCallback? _focusGuard;
@@ -143,22 +145,35 @@ internal sealed class ObsEngine : IDisposable
         Native.obs_set_output_source(0, Native.obs_scene_get_source(_scene));
 
         uint channel = 1;
-        if (settings.GameAudio && !settings.DesktopAudio && !synthetic && target != null)
+        var tracks = new List<string> { "Master" };
+        void AddAudio(nint source, string name, bool master)
+        {
+            uint mask = master ? 1u : 0;
+            if (settings.SeparateAudioTracks)
+            {
+                mask |= 1u << tracks.Count;
+                tracks.Add(name);
+            }
+            Native.obs_source_set_audio_mixers(source, mask);
+            Native.obs_set_output_source(channel++, source);
+        }
+
+        if (settings.GameAudio && (!settings.DesktopAudio || settings.SeparateAudioTracks) && !synthetic && target != null)
         {
             if (!Inputs.Contains("wasapi_process_output_capture")) throw new InvalidOperationException("Application audio is unavailable on this Windows/runtime version. Desktop audio will not be substituted.");
             using var data = new ObsData(); data.Set("window", target.Selector).Set("priority", 2);
             _gameAudio = CreateSource("wasapi_process_output_capture", "League audio", data);
-            Native.obs_set_output_source(channel++, _gameAudio);
+            AddAudio(_gameAudio, "Game", !settings.DesktopAudio);
         }
         if (settings.DesktopAudio)
         {
             using var data = new ObsData(); data.Set("device_id", "default");
-            Native.obs_set_output_source(channel++, CreateSource("wasapi_output_capture", "Desktop audio (opt-in)", data));
+            AddAudio(CreateSource("wasapi_output_capture", "Desktop audio (opt-in)", data), "Desktop (includes game)", true);
         }
         if (settings.Microphone && !synthetic)
         {
             using var data = new ObsData(); data.Set("device_id", "default");
-            Native.obs_set_output_source(channel, CreateSource("wasapi_input_capture", "Microphone (opt-in)", data));
+            AddAudio(CreateSource("wasapi_input_capture", "Microphone (opt-in)", data), "Microphone", true);
         }
         var choices = settings.Encoder switch
         {
@@ -176,9 +191,14 @@ internal sealed class ObsEngine : IDisposable
         Native.obs_encoder_set_video(_video, Native.obs_get_video());
         var audioId = new[] { "ffmpeg_aac", "CoreAudio_AAC" }.FirstOrDefault(Encoders.Contains) ?? throw new InvalidOperationException("AAC encoder unavailable.");
         using var audioSettings = new ObsData(); audioSettings.Set("bitrate", 192);
-        _audio = Native.obs_audio_encoder_create(audioId, "Echo AAC", audioSettings.Handle, 0, 0);
-        if (_audio == 0) throw new InvalidOperationException("Could not create AAC encoder.");
-        Native.obs_encoder_set_audio(_audio, Native.obs_get_audio());
+        for (int index = 0; index < tracks.Count; index++)
+        {
+            var audio = Native.obs_audio_encoder_create(audioId, tracks[index], audioSettings.Handle, (nuint)index, 0);
+            if (audio == 0) throw new InvalidOperationException("Could not create AAC encoder.");
+            _audio.Add(audio);
+            Native.obs_encoder_set_audio(audio, Native.obs_get_audio());
+        }
+        AudioTracks = [..tracks];
         Directory.CreateDirectory(sessionDirectory);
         using var outputSettings = new ObsData();
         bool replay = settings.Mode == RecordingMode.Clips;
@@ -188,7 +208,8 @@ internal sealed class ObsEngine : IDisposable
         else outputSettings.Set("path", Path.Combine(sessionDirectory, "match.mkv"));
         _output = Native.obs_output_create(replay ? "replay_buffer" : "ffmpeg_muxer", "Echo output", outputSettings.Handle, 0);
         if (_output == 0) throw new InvalidOperationException("Could not create recording output.");
-        Native.obs_output_set_video_encoder(_output, _video); Native.obs_output_set_audio_encoder(_output, _audio, 0);
+        Native.obs_output_set_video_encoder(_output, _video);
+        for (int index = 0; index < _audio.Count; index++) Native.obs_output_set_audio_encoder(_output, _audio[index], (nuint)index);
         if (!Native.obs_output_start(_output)) throw new InvalidOperationException($"Recording failed: {LastError}");
     }
 
@@ -246,7 +267,7 @@ internal sealed class ObsEngine : IDisposable
         if (_scene != 0) Native.obs_scene_release(_scene);
         foreach (var source in _sources) Native.obs_source_release(source);
         if (_video != 0) Native.obs_encoder_release(_video);
-        if (_audio != 0) Native.obs_encoder_release(_audio);
+        foreach (var audio in _audio) Native.obs_encoder_release(audio);
         Native.obs_shutdown(); _started = false; _output = 0;
         if (_com) { Native.CoUninitialize(); _com = false; }
     }
