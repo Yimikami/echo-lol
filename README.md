@@ -13,9 +13,11 @@
   · <a href="#build-from-source">Build from source</a>
 </p>
 
-![Echo library with champion artwork, highlights, event markers and recent captures](docs/images/library.jpg)
+<p align="center">
+  <a href="docs/images/library.jpg"><img src="docs/images/library.jpg" width="960" alt="Echo library with champion artwork, highlights, event markers and recent captures" /></a>
+</p>
 
-*Screenshots show the current development build.*
+<p align="center"><sub>Screenshots show the current development build.</sub></p>
 
 ## Play. Echo handles the recording.
 
@@ -34,7 +36,9 @@ Requires **Windows 10/11 x64** and a supported hardware H.264 encoder. Release d
 - **Ready to share.** Trim and export landscape, square or vertical MP4s, with optional League HUD framing and keyboard/mouse overlays.
 - **A local library.** Search, favorite, tag and select clips in bulk. Manage storage, restore items from Trash, or back up your library.
 
-![Echo reviewing a full League match with event navigation, keyboard and mouse inputs, and an APM timeline](docs/images/player.jpg)
+<p align="center">
+  <a href="docs/images/player.jpg"><img src="docs/images/player.jpg" width="960" alt="Echo reviewing a full League match with event navigation, keyboard and mouse inputs, and an APM timeline" /></a>
+</p>
 
 ## Make the overlay yours
 
@@ -42,7 +46,9 @@ Choose the keys you use, a mouse layout and a style. Drag and resize the overlay
 
 Enable **Record gameplay inputs** in **Settings → Input overlay** before a match to capture keys, mouse buttons and APM. Overlay visibility is a separate setting.
 
-![Echo input-overlay settings with layout and style choices beside a real gameplay placement preview](docs/images/input-overlay.jpg)
+<p align="center">
+  <a href="docs/images/input-overlay.jpg"><img src="docs/images/input-overlay.jpg" width="960" alt="Echo input-overlay settings with layout and style choices beside a real gameplay placement preview" /></a>
+</p>
 
 ## Build from source
 
