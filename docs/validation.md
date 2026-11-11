@@ -14,12 +14,12 @@ This ledger separates implemented behavior, fixture evidence and live-game accep
 - MP4 range-export engine exercised on a recorded fixture independently of the UI; full interactive export acceptance remains pending.
 - Live fullscreen practice session: **28 kill events, 1 death event and 15 saved clips** in a completed recording session of about 9 minutes. A saved frame was visually verified as actual League gameplay. Assist detection remains fixture-verified; this solo practice session did not establish live assist acceptance.
 - Public repository published at https://github.com/Yimikami/echo-lol; Windows CI passed on the earlier published recording/library revisions. New fixes must be checked at their own commit.
-- Library redesign: a native gallery, clip player and four settings categories rendered at 1480×920 and 1100×720. Manrope and regular Phosphor vectors resolve from bundled assets. These are offscreen application renders, not desktop screenshots or gameplay evidence.
+- Library redesign: a native gallery, clip player and four settings categories rendered at 1480×920 and 1100×720. That earlier revision used bundled Manrope and Phosphor vectors; the current UI uses Windows Segoe UI and retains Bebas Neue display headings. These are offscreen application renders, not desktop screenshots or gameplay evidence.
 - **46 UI checks passed** across both sizes: automatic startup, font/icon resources, gallery/player/back navigation, opt-in trimming, volume/mute, visible volume-track geometry, fullscreen layout restoration, event lead-in, delete confirmation/cancellation, settings categories/validation/persistence, immediate audio/mode saving, shortcut persistence, active full-match visibility, bounded pagination and search reset.
 - Global shortcut registration, conflict detection and release/re-registration passed against real Windows APIs. No key injection was used; in-game shortcut acceptance remains open.
 - Desktop loopback audio: the packaged recorder captured a deliberately quiet 997 Hz system-output fixture in a 7.07-second synthetic recording. Band-limited output measured −55.1 dB mean / −51.9 dB peak. This verifies this machine's current default output device, not every audio routing setup. Microphone was off.
 - Automatic highlight preparation: an eight-second synthetic A/V recording with a masked interval from 2–4 seconds produced a decodable 5.88-second copy (including boundary guards). A nonzero-start 1–7-second highlight produced a decodable 3.88-second copy. Event mapping crossed the removed interval correctly; SHA-256 confirmed the original full-match file was unchanged. These are controlled media fixtures, not new live Alt+Tab acceptance.
-- Public-source previews include only the native settings view; private gameplay previews, profiles and recordings remain excluded from Git.
+- Documentation images include app-window captures published with the owner's permission. Original gameplay files, local profiles and test artifacts remain excluded from Git.
 
 - The optional Raw Input observer registered keyboard/mouse devices and removed both registrations in a packaged native check without key injection. Actual game input ingestion remains pending. Settings have no save-status label; input recording is opt-in.
 
@@ -59,3 +59,17 @@ Update the ledger with actual evidence as checks complete; do not convert a pend
 
 - Offscreen WPF and FFmpeg verification passed 58 checks, including cross-page selection, square and portrait layouts, HUD framing, audio mixing and track preservation, recap concatenation and MP4 import.
 - Synthetic 720p60 OBS/NVENC captures in full-match and highlights modes wrote separate tracks with zero reported dropped frames. League event recognition, game-audio isolation and gameplay FPS for this revision still need live validation.
+
+## Placement preview refresh — 2026-11-11
+
+- Release build: zero warnings/errors; 96 core, 99 offscreen Windows UI and 92 overlay/media checks passed. This is local fixture evidence, not a new live-game performance measurement.
+- Input settings use the available window width. The preview measured approximately 792 pixels at a 1480-pixel window and 412 pixels at 1100; the controls remain independently scrollable.
+- Latest-frame refresh selects completed, available recordings independently of the current library filter or player selection. Checks exercise replacement of an already-cached image, an empty library, invalid video, active capture, and restoration of the refresh button without leftover staging files. Failed or deferred refresh preserves both the previous image and cache.
+- Rounded mouse contours are shared by the layout glyphs and playback/export artwork. Four overlay layouts still produce decodable exports and preserve original media.
+- Local package: artifacts/echo-preview-v5. Final verification artifacts: artifacts/echo-preview-v5-ui-checked and artifacts/echo-preview-v5-media-checked. Publication and user acceptance remain separate.
+
+## Current interface and commit verification — 2026-11-11
+
+- The final local package passed 96 core, 99 offscreen UI and 92 media/overlay checks (287 total). Release build completed with zero warnings/errors. File-system tests required normal Windows access; a restricted run was not counted as a pass.
+- README images were captured from the running echo-tray-v6 app on the owner's Windows desktop, using the owner's library and recordings with explicit permission. The library, full-match player/APM timeline and input-overlay settings were inspected. These screenshots are desktop UI evidence, not a new League capture or FPS benchmark.
+- Images are documented in docs/images/provenance.json. Superseded README images were removed. Local packages, profiles, recordings and verification artifacts are not part of the source commit.

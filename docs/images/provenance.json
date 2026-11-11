@@ -1,0 +1,26 @@
+{
+  "captured": "2026-11-11",
+  "source": "Current Echo Windows application, captured on the project owner's PC with permission for README use.",
+  "build": "Local echo-tray-v6; working source after v0.2.3.",
+  "images": [
+    {
+      "path": "library.jpg",
+      "width": 1480,
+      "height": 920,
+      "sha256": "6c2648ec583550281f8a2223cb3b8c09865aff166d5e45f7d92b611077a0d9a8"
+    },
+    {
+      "path": "player.jpg",
+      "width": 1480,
+      "height": 920,
+      "sha256": "841f9138250e654210c4bd56a5ada88249eae9988101852355c2fd49b3be49bc"
+    },
+    {
+      "path": "input-overlay.jpg",
+      "width": 1480,
+      "height": 920,
+      "sha256": "fe86c8c8025a7334bf1230c05189e265ee11f5f1e394b4f0409f3ff7c493df9c"
+    }
+  ],
+  "notes": "Unedited application-window captures using the owner's recordings. Gameplay and champion artwork belong to Riot Games. Original recordings and local profiles are not included."
+}
