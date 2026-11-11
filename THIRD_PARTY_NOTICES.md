@@ -1,6 +1,6 @@
 # Third-party notices
 
-Echo's original source is GPL-3.0-or-later. The emblem was generated for Echo with OpenAI Imagegen; its generation prompt is retained in `assets/brand/provenance.json`.
+Echo's original source is GPL-3.0-or-later. The Fold emblem is original geometric SVG artwork created for Echo, selected by the project owner. Its source and derived assets are documented in `assets/brand/provenance.json`.
 
 OBS Studio / libobs is copyright its contributors and licensed GPL-2.0-or-later. Echo uses the public C API through original declarations. No ObsKit.NET, Segra or RePlays source is incorporated. See https://github.com/obsproject/obs-studio and the OBS licenses copied into bundled runtimes.
 

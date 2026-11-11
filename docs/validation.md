@@ -73,3 +73,9 @@ Update the ledger with actual evidence as checks complete; do not convert a pend
 - The final local package passed 96 core, 99 offscreen UI and 92 media/overlay checks (287 total). Release build completed with zero warnings/errors. File-system tests required normal Windows access; a restricted run was not counted as a pass.
 - README images were captured from the running echo-tray-v6 app on the owner's Windows desktop, using the owner's library and recordings with explicit permission. The library, full-match player/APM timeline and input-overlay settings were inspected. These screenshots are desktop UI evidence, not a new League capture or FPS benchmark.
 - Images are documented in docs/images/provenance.json. Superseded README images were removed. Local packages, profiles, recordings and verification artifacts are not part of the source commit.
+
+## Fold identity — 2026-11-11
+
+- The selected Fold SVG is the source for the transparent PNG, light-background SVG, native WPF setup geometry and nine-size Windows ICO (16 through 256px). Repeat generation produced identical assets.
+- Release build completed with zero warnings/errors; 99 offscreen UI checks passed. Both built executables' extracted 32px icons matched the corresponding ICO frame. The installer references the same ICO; no installer was rebuilt in this brand-only turn.
+- The local package is artifacts/echo-fold-v7. Existing running or installed copies must be restarted/replaced to use the new binaries. No new live-game capture or public release was performed.

@@ -1,9 +1,31 @@
 {
-  "generator": "OpenAI built-in image_gen",
-  "prompt": "Use case: logo-brand. Create a single distinctive app emblem for Echo, a lightweight League of Legends gameplay recorder. Icon only, NO text or letters. Two precise interlocking angular echo ribbons form a forward-facing play aperture and an open bookmark cut, suggesting a saved moment returning. Premium restrained geometric identity, flat vector-like shapes with exceptionally clean edges, seafoam mint and warm off-white, tiny warm coral accent if useful. Strong silhouette readable at 24 pixels; centered with ample transparent padding. Avoid microphone, headphones, equalizer, gamepad, shield, Riot or League logos, gradients, glow, shadows, mockups, backgrounds. Transparent background. One standalone emblem, not a sheet of variations.",
-  "date": "2026-10-27",
-  "asset": "echo-emblem.png",
+  "name": "Echo Fold",
+  "date": "2026-11-11",
+  "source": "echo-emblem.svg",
+  "origin": "Original geometric SVG artwork authored for Echo; Fold direction selected by the project owner.",
+  "palette": {
+    "primary": "#C5F65B",
+    "lightBackgroundInk": "#172305",
+    "windowsTile": "#15181A"
+  },
+  "generator": "scripts/build-brand.ps1 (Windows WPF vector rendering; no external fonts or image service)",
   "derived": {
-    "echo.ico": "Format conversion with FFmpeg, 256×256. No source image modification."
+    "echo-emblem-light.svg": "Same paths, dark ink for light backgrounds.",
+    "echo-emblem.png": "512px transparent PNG.",
+    "echo.ico": {
+      "sizes": [
+        16,
+        20,
+        24,
+        32,
+        40,
+        48,
+        64,
+        128,
+        256
+      ],
+      "format": "32-bit RGBA PNG entries; dark rounded tile for Windows contrast."
+    },
+    "../../src/Echo.App/Assets/Brand.xaml": "Same SVG paths converted to native WPF geometry for setup."
   }
 }

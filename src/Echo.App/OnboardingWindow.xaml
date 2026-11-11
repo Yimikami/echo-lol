@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Echo.App.Controls" x:Class="Echo.App.OnboardingWindow" Title="Welcome to Echo" Width="960" Height="760" MinWidth="900" MinHeight="700" ResizeMode="NoResize" WindowStyle="None" WindowStartupLocation="CenterOwner" Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource TextBrush}" UseLayoutRounding="True" SnapsToDevicePixels="True" FontFamily="{StaticResource StudioFont}" PreviewKeyDown="SetupKeyDown">
+<Window Icon="pack://application:,,,/Echo;component/Assets/echo.ico" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Echo.App.Controls" x:Class="Echo.App.OnboardingWindow" Title="Welcome to Echo" Width="960" Height="760" MinWidth="900" MinHeight="700" ResizeMode="NoResize" WindowStyle="None" WindowStartupLocation="CenterOwner" Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource TextBrush}" UseLayoutRounding="True" SnapsToDevicePixels="True" FontFamily="{StaticResource StudioFont}" PreviewKeyDown="SetupKeyDown">
   <Window.Resources>
     <Style x:Key="SetupCard" TargetType="Border">
       <Setter Property="Background" Value="{DynamicResource PanelBrush}"/>
@@ -66,7 +66,7 @@
             </StackPanel.Resources>
             <StackPanel Orientation="Horizontal" MouseLeftButtonDown="SetupDrag">
               <Border Background="{DynamicResource AccentBrush}" CornerRadius="12" Width="40" Height="40">
-                <local:PhosphorIcon Kind="Play" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}"/>
+                <Path Data="{StaticResource EchoBrandGeometry}" Fill="{DynamicResource AccentTextBrush}" Width="26" Height="26" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
               <TextBlock Text="Echo" Style="{StaticResource DisplayHeading}" FontSize="34" VerticalAlignment="Center" Margin="12,1,0,0"/>
             </StackPanel>

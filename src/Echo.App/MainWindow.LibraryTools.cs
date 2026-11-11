@@ -415,7 +415,7 @@ public partial class MainWindow
 
     private bool ShowToolDialog(string title, FrameworkElement content, string confirm, double width = 500, Func<bool>? validate = null)
     {
-        var dialog = new Window { Owner = this, Title = title, Width = width, SizeToContent = SizeToContent.Height,
+        var dialog = new Window { Owner = this, Icon = Icon, Title = title, Width = width, SizeToContent = SizeToContent.Height,
             MaxHeight = Math.Max(420, SystemParameters.WorkArea.Height * .88), WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize, WindowStyle = WindowStyle.None, ShowInTaskbar = false, UseLayoutRounding = true };
         dialog.SetResourceReference(BackgroundProperty, "PanelBrush");

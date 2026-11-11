@@ -11,6 +11,7 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <ProjectReference Include="../Echo.Core/Echo.Core.csproj" />
     <Resource Include="../../assets/brand/echo-emblem.png" Link="Assets/echo-emblem.png" />
+    <Resource Include="../../assets/brand/echo.ico" Link="Assets/echo.ico" />
     <Resource Include="../../assets/brand/game-preview.png" Link="Assets/game-preview.png" />
     <Resource Include="../../assets/brand/setup-jinx.jpg" Link="Assets/setup-jinx.jpg" />
     <EmbeddedResource Include="Assets/champions.json" LogicalName="Echo.Champions.json" />

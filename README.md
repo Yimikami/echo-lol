@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/brand/echo-emblem.png" width="80" alt="Echo logo" />
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/echo-emblem-light.svg" />
+    <img src="assets/brand/echo-emblem.svg" width="80" height="80" alt="Echo Fold logo" />
+  </picture>
 </p>
 
 <h1 align="center">Echo</h1>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="#C5F65B" role="img" aria-labelledby="title desc">
+  <title id="title">Echo — Fold</title>
+  <desc id="desc">Two interlocking ribbons, a moment returning.</desc>
+  <path fill-rule="evenodd" d="M64 40 H136 L192 104 H140 L116 76 H80 V152 H40 V64 Z"/>
+  <path fill-rule="evenodd" d="M192 216 H120 L64 152 H116 L140 180 H176 V104 H216 V192 Z"/>
+</svg>
