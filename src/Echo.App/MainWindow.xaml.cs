@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     private readonly List<ClipItem> _items = [];
     private ClipItem? _selected, _deleteCandidate;
     private string _filter = "All", _catalogSignature = "";
-    private bool _updating, _seeking, _playing, _matches, _exporting, _fullscreen, _reconnecting, _deleting;
+    private bool _updating, _playing, _matches, _exporting, _fullscreen, _reconnecting, _deleting;
     private volatile bool _closing;
     private double _duration;
     private int _ticks, _selectionVersion, _galleryPage;
@@ -54,9 +54,15 @@ public partial class MainWindow : Window
         OutputInput.LostKeyboardFocus += (_, _) => AutoSave(false);
         _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
         Player.Volume = VolumeSlider.Value;
+        _scrubTimer.Tick += (_, _) => PreviewScrub();
+        Seek.LostMouseCapture += (_, _) => CompleteScrub();
+        Timeline.ScrubStarted += BeginScrub;
+        Timeline.ScrubCompleted += CompleteScrub;
+        PlaybackActivity.ScrubStarted += BeginScrub;
+        PlaybackActivity.ScrubCompleted += CompleteScrub;
         Timeline.SeekRequested += SeekTo;
         Timeline.MomentRequested += t => { SeekTo(Math.Max(Timeline.SelectionStart, t - 3)); SetPlaying(true); };
-        Timeline.RangeChanged += (_, _) => UpdateRange();
+        Timeline.RangeChanged += (_, _) => { if (_seeking) _scrubRangeDirty = true; else UpdateRange(); };
         PlaybackActivity.SeekRequested += SeekTo;
         PlaybackActivity.MomentRequested += t=>{SeekTo(Math.Max(PlaybackActivity.Start,t-3));SetPlaying(true);};
         InputPlacementPreview.PlacementChanged += preset => { _inputPreset=preset; PersistInputPreset(); };
@@ -64,7 +70,7 @@ public partial class MainWindow : Window
         _inputTimer.Tick += (_, _) => { if (!_seeking) UpdateInputState(Player.Position.TotalSeconds); };
         StateChanged += (_, _) => RefreshInputTimer();
         _timer.Tick += (_, _) => Tick(); _timer.Start();
-        Closing += (_, _) => { _closing = true; _selectionVersion++; _timer.Stop(); _inputTimer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
+        Closing += (_, _) => { _closing = true; CancelScrub(); _selectionVersion++; _timer.Stop(); _inputTimer.Stop(); _toastTimer.Stop(); _settingsTimer.Stop(); if (_settingsDirty) SaveSettingsClick(this, new()); Player.Close(); };
         _overlayReady=true;
     }
     private void Tick()
@@ -75,7 +81,7 @@ public partial class MainWindow : Window
             RefreshStatus();
             if (_artworkPending) RequestChampionArtwork();
         }
-        if (_ticks % 25 == 0)
+        if (!_seeking && _ticks % 25 == 0)
         {
             if (!CaptureActive() || _matches && LibraryPanel.IsVisible && WindowState != WindowState.Minimized) RefreshCatalog();
             ScheduleStorageCleanup();
@@ -87,7 +93,7 @@ public partial class MainWindow : Window
         if (Math.Abs(Timeline.Position - position) > .01) { Timeline.Position = position; Timeline.InvalidateVisual(); }
         PlaybackActivity.Position=position;PlaybackActivity.InvalidateVisual();
         UpdatePlaybackTime(position);
-        UpdatePlaybackInputs(position);
+        UpdateInputState(position);
         if (_playing && position >= Timeline.SelectionEnd) SetPlaying(false);
     }
     private bool CaptureActive()
@@ -290,6 +296,7 @@ public partial class MainWindow : Window
     }
     private void BackToLibraryClick(object sender, RoutedEventArgs e)
     {
+        CancelScrub();
         if (_fullscreen) SetFullscreen(false);
         SetPlaying(false); EditorPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; LibraryPanel.Visibility = Visibility.Visible;
         _bindingGallery = true; ClipList.SelectedItem = null; _bindingGallery = false;
@@ -298,6 +305,7 @@ public partial class MainWindow : Window
     private void JumpForwardClick(object sender, RoutedEventArgs e) => SeekTo(Player.Position.TotalSeconds + 5);
     private void ClearPlayer()
     {
+        CancelScrub();
         _selected = null; _selectionVersion++; SetPlaying(false); Player.Close(); _duration = 0;
         Timeline.Duration = 0; Timeline.Frames = []; Timeline.Moments = []; Timeline.MomentLabels = new Dictionary<double, string>(); _apmComparison = null; Timeline.InvalidateVisual();
         ReviewDesk.DataContext = null;
@@ -331,13 +339,14 @@ public partial class MainWindow : Window
     private void OpenRecording(ClipItem item)
     {
         if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
+        CancelScrub();
         OpenEditor();
         ReviewDesk.DataContext = item;
         RequestChampionArtwork(item);
         SetTimelineMoments(item);
         if (_selected?.Entry == item.Entry && _selected.Clip.Path == item.Clip.Path)
         {
-            _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.Subtitle + "   ·   " + item.Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy, HH:mm", CultureInfo.InvariantCulture); return;
+            _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.Subtitle + "   ·   " + item.Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy, HH:mm", CultureInfo.InvariantCulture); SetPlaying(_playing); return;
         }
         _selectionVersion++; _selected = item; _duration = 0; SetPlaying(false); Player.Close(); EmptyPlayer.Visibility = Visibility.Collapsed;
         LoadInputData(item);
@@ -357,6 +366,7 @@ public partial class MainWindow : Window
         Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration);
         SetTimelineMoments(_selected);
         _updating = false; UpdateRange();
+        UpdatePlaybackInputs(Timeline.SelectionStart);
         var first = _selected.Session.Moments.FirstOrDefault(m => PlaybackNavigation.FileTime(_selected.Clip, m.RecordingTime) is { } t && t >= Timeline.SelectionStart && t <= Timeline.SelectionEnd);
         SeekTo(first == null ? Timeline.SelectionStart : PlaybackNavigation.BeforeEvent(_selected.Clip, first.RecordingTime, Timeline.SelectionStart, Timeline.SelectionEnd));
         Player.Pause(); PlayerPoster.Visibility = PlayerPoster.Source != null ? Visibility.Visible : Visibility.Collapsed;
@@ -380,7 +390,7 @@ public partial class MainWindow : Window
                 var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 1280; bitmap.UriSource = new Uri(posterPath); bitmap.EndInit(); bitmap.Freeze(); return bitmap;
             });
             if (version != _selectionVersion || _closing) return;
-            if (!_playing && Math.Abs(Player.Position.TotalSeconds - posterAt) < .15) { PlayerPoster.Source = poster; PlayerPoster.Visibility = Visibility.Visible; }
+            if (!_playing && !_seeking && Math.Abs(Player.Position.TotalSeconds - posterAt) < .15) { PlayerPoster.Source = poster; PlayerPoster.Visibility = Visibility.Visible; }
             var frames = new List<ImageSource>();
             for (int i = 0; i < 8; i++)
             {
@@ -410,7 +420,7 @@ public partial class MainWindow : Window
         _playing = play;
         RefreshInputTimer();
         if (Player == null) return;
-        if (play) { PlayerPoster.Visibility = Visibility.Collapsed; Player.Play(); } else Player.Pause();
+        if (play && !_seeking) { PlayerPoster.Visibility = Visibility.Collapsed; Player.Play(); } else Player.Pause();
         PlayIcon.Kind = play ? "Pause" : "Play";
         PlayButton.ToolTip = play ? "Pause (Space)" : "Play (Space)";
     }
@@ -423,11 +433,11 @@ public partial class MainWindow : Window
     private void SeekTo(double seconds)
     {
         if (_selected == null || _duration <= 0) return;
-        var at = Math.Clamp(seconds, 0, _duration); Player.Position = TimeSpan.FromSeconds(at); PlayerPoster.Visibility = Visibility.Collapsed;
-        Timeline.Position = at; Timeline.InvalidateVisual(); _updating = true; Seek.Value = at; _updating = false;
-        PlaybackActivity.Position=at;PlaybackActivity.InvalidateVisual();
-        UpdatePlaybackTime(at);
-        UpdatePlaybackInputs(at);
+        if (!double.IsFinite(seconds)) return;
+        var at = Math.Clamp(seconds, 0, _duration);
+        if (_seeking) { _scrub.Request(at, ScrubNow); return; }
+        ApplyMediaSeek(at);
+        UpdateSeekDisplay(at);
     }
     private void PreviewMoment(double recordingTime)
     {
@@ -435,8 +445,8 @@ public partial class MainWindow : Window
         SeekTo(PlaybackNavigation.BeforeEvent(_selected.Clip, recordingTime, Timeline.SelectionStart, Timeline.SelectionEnd)); SetPlaying(true);
     }
     private void SeekChanged(object sender, RoutedPropertyChangedEventArgs<double> e) { if (!_updating) SeekTo(e.NewValue); }
-    private void SeekDown(object sender, MouseButtonEventArgs e) => _seeking = true;
-    private void SeekUp(object sender, MouseButtonEventArgs e) { _seeking = false; SeekTo(Seek.Value); }
+    private void SeekDown(object sender, MouseButtonEventArgs e) => BeginScrub();
+    private void SeekUp(object sender, MouseButtonEventArgs e) { SeekTo(Seek.Value); CompleteScrub(); }
     private void VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (Player == null || VolumeIcon == null) return;
@@ -569,7 +579,7 @@ public partial class MainWindow : Window
         else if (e.Key == Key.I) { SetTrimOpen(true); SetInClick(this, e); }
         else if (e.Key == Key.O) { SetTrimOpen(true); SetOutClick(this, e); }
         else if (e.Key == Key.Delete) DeleteClick(this, e);
-        else if (e.Key is Key.Left or Key.Right && e.OriginalSource is not Controls.ClipTimeline && e.OriginalSource is not Slider) SeekTo(Player.Position.TotalSeconds + (e.Key == Key.Right ? 5 : -5));
+        else if (e.Key is Key.Left or Key.Right && e.OriginalSource is not (Controls.ClipTimeline or Controls.PlaybackTimeline or Slider)) SeekTo(Player.Position.TotalSeconds + (e.Key == Key.Right ? 5 : -5));
         else return;
         e.Handled = true;
     }
@@ -672,6 +682,7 @@ public partial class MainWindow : Window
     private void FilterClick(object sender, RoutedEventArgs e) { _filter = (string)((Button)sender).Tag; SetFilter(); ApplyFilter(true); }
     private void SetNav(string active)
     {
+        CancelScrub();
         foreach (var (button, page) in new[] { (LibraryNav, "Clips"), (MatchesNav, "Matches"), (FavoritesNav, "Favorites"), (SettingsNav, "Settings") })
         {
             if (page == active)

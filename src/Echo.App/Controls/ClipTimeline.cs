@@ -19,6 +19,8 @@ public sealed class ClipTimeline : FrameworkElement
     public event Action<double>? SeekRequested;
     public event Action<double, double>? RangeChanged;
     public event Action<double>? MomentRequested;
+    public event Action? ScrubStarted;
+    public event Action? ScrubCompleted;
     private int _drag;
     private const double Inset = 12, Top = 31;
     private double StripHeight => Math.Max(44, Math.Min(76, ActualHeight - 78));
@@ -103,10 +105,27 @@ public sealed class ClipTimeline : FrameworkElement
             if (candidates.Length > 0 && Math.Abs(X(candidates[0].Time) - p.X) < 14) { MomentRequested?.Invoke(candidates[0].Time); e.Handled = true; return; }
         }
         _drag = Math.Abs(p.X - X(SelectionStart)) < 11 ? 1 : Math.Abs(p.X - X(SelectionEnd)) < 11 ? 2 : 3;
-        CaptureMouse(); Move(p.X); e.Handled = true;
+        if (CaptureMouse()) ScrubStarted?.Invoke();
+        else _drag = 0;
+        Move(p.X); e.Handled = true;
     }
     protected override void OnMouseMove(MouseEventArgs e) { base.OnMouseMove(e); if (IsMouseCaptured && e.LeftButton == MouseButtonState.Pressed) Move(e.GetPosition(this).X); }
-    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e) { base.OnMouseLeftButtonUp(e); if (IsMouseCaptured) ReleaseMouseCapture(); _drag = 0; }
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        if (_drag == 0) return;
+        Move(e.GetPosition(this).X);
+        ReleaseMouseCapture();
+        FinishScrub();
+        e.Handled = true;
+    }
+    protected override void OnLostMouseCapture(MouseEventArgs e) { base.OnLostMouseCapture(e); FinishScrub(); }
+    private void FinishScrub()
+    {
+        if (_drag == 0) return;
+        _drag = 0;
+        ScrubCompleted?.Invoke();
+    }
     private void Move(double x)
     {
         var t = At(x);

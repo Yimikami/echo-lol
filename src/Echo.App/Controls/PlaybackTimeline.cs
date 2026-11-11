@@ -18,6 +18,9 @@ public sealed class PlaybackTimeline : FrameworkElement
     public double? ReferenceApm { get; set; }
     public event Action<double>? SeekRequested;
     public event Action<double>? MomentRequested;
+    public event Action? ScrubStarted;
+    public event Action? ScrubCompleted;
+    private bool _scrubbing;
     private const double Left=32,Right=16,GraphTop=6,GraphBottom=52,MarkerY=70;
     private double Span=>Math.Max(1,ActualWidth-Left-Right);
     private double X(double time)=>Left+Math.Clamp((time-Start)/Math.Max(.001,End-Start),0,1)*Span;
@@ -103,7 +106,12 @@ public sealed class PlaybackTimeline : FrameworkElement
         base.OnMouseLeftButtonDown(e);if(End<=Start)return;Focus();var at=e.GetPosition(this);
         var markers=Moments.Where(m=>m.Time>=Start&&m.Time<=End).OrderBy(m=>Math.Abs(X(m.Time)-at.X)).ToArray();
         if(Math.Abs(at.Y-MarkerY)<14&&markers.Length>0&&Math.Abs(X(markers[0].Time)-at.X)<11)MomentRequested?.Invoke(markers[0].Time);
-        else{CaptureMouse();SeekRequested?.Invoke(TimeAt(at.X));}e.Handled=true;
+        else
+        {
+            if (CaptureMouse()) { _scrubbing = true; ScrubStarted?.Invoke(); }
+            SeekRequested?.Invoke(TimeAt(at.X));
+        }
+        e.Handled=true;
     }
     protected override void OnMouseMove(MouseEventArgs e)
     {
@@ -112,7 +120,22 @@ public sealed class PlaybackTimeline : FrameworkElement
         var activity=Activity.MinBy(p=>Math.Abs(p.Time-time));
         ToolTip=marker.Length>0&&Math.Abs(X(marker[0].Time)-point.X)<11?$"{MomentLabels.GetValueOrDefault(marker[0].Time, marker[0].Kind.ToString())} · {Stamp(marker[0].Time-Start)}":$"{Stamp(time-Start)}"+(activity!=null?$" · {activity.Apm} APM":"");
     }
-    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e){base.OnMouseLeftButtonUp(e);if(IsMouseCaptured)ReleaseMouseCapture();}
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        if (!_scrubbing) return;
+        SeekRequested?.Invoke(TimeAt(e.GetPosition(this).X));
+        ReleaseMouseCapture();
+        FinishScrub();
+        e.Handled = true;
+    }
+    protected override void OnLostMouseCapture(MouseEventArgs e) { base.OnLostMouseCapture(e); FinishScrub(); }
+    private void FinishScrub()
+    {
+        if (!_scrubbing) return;
+        _scrubbing = false;
+        ScrubCompleted?.Invoke();
+    }
     protected override void OnKeyDown(KeyEventArgs e){base.OnKeyDown(e);if(e.Key is Key.Left or Key.Right){SeekRequested?.Invoke(Math.Clamp(Position+(e.Key==Key.Right?1:-1)*(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)?.1:1),Start,Math.Max(Start,End)));e.Handled=true;}}
     internal void SeekFraction(double value)=>SeekRequested?.Invoke(Start+Math.Clamp(value,0,1)*Math.Max(0,End-Start));
 }

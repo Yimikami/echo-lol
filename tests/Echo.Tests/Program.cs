@@ -89,6 +89,48 @@ Test("placement preview can use a completed full match and keeps short seeks in 
     }
     finally { File.Delete(file); }
 });
+Test("twenty seconds of 1000 Hz scrubbing never queue intermediate decoder seeks", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(0);
+    int previews = 0;
+    for (int i = 1; i <= 20000; i++)
+    {
+        scrub.Request(i % 1800 + .125, i / 1000d);
+        if (scrub.TakePreview(i / 1000d) != null) previews++;
+    }
+    Check(previews == 0 && scrub.Complete() == 20000 % 1800 + .125);
+    Check(!scrub.Active && scrub.TakePreview(100) == null && scrub.Complete() == null);
+});
+Test("a paused pointer previews only its latest target once", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(0);
+    scrub.Request(800, 0); scrub.Request(17.25, .01); scrub.Request(12.5, .02);
+    Check(scrub.TakePreview(.1) == null && scrub.TakePreview(.15) == 12.5);
+    Check(scrub.TakePreview(10) == null && scrub.Complete() == 12.5);
+});
+Test("repeated stationary mouse events do not postpone the frame preview", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(0); scrub.Request(42, 0);
+    for (int i = 1; i <= 20; i++) scrub.Request(42, i / 100d);
+    Check(scrub.TakePreview(.21) == 42);
+});
+Test("releasing a quick drag commits immediately without waiting for a preview", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(10); scrub.Request(3.125, 5);
+    Check(scrub.Complete() == 3.125 && scrub.TakePreview(100) == null);
+});
+Test("cancelled scrubs cannot seek a different recording later", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(0); scrub.Request(900, 0); scrub.Cancel();
+    Check(scrub.TakePreview(1) == null && scrub.Complete() == null);
+    scrub.Begin(4); Check(scrub.TakePreview(2) == null && scrub.Complete() == 4);
+});
+Test("non-finite scrub requests cannot poison the final seek", () =>
+{
+    var scrub = new PlaybackScrub(); scrub.Begin(4);
+    scrub.Request(double.NaN, 0); scrub.Request(double.PositiveInfinity, 1); scrub.Request(8, double.NaN);
+    Check(scrub.Complete() == 4);
+});
 Test("default audio is game only", () => { var s = Settings(); Check(s.GameAudio && !s.DesktopAudio && !s.Microphone); });
 Test("valid defaults", () => Settings().Validate());
 Test("reject insufficient replay memory", () => Throws(() => (Settings() with { BufferMegabytes = 32, BitrateKbps = 50000 }).Validate()));

@@ -505,7 +505,7 @@
             </Grid.RowDefinitions>
             <local:CutCornerBorder x:Name="VideoSurface" Background="#080A09" Margin="30,0,12,0" Cut="24" ClipToBounds="True" MouseLeftButtonDown="VideoClicked">
               <Grid>
-                <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform" MediaOpened="MediaOpened" MediaEnded="MediaEnded" MediaFailed="MediaFailed"/>
+                <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Close" ScrubbingEnabled="True" Stretch="Uniform" MediaOpened="MediaOpened" MediaEnded="MediaEnded" MediaFailed="MediaFailed"/>
                 <Image x:Name="PlayerPoster" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False"/>
                 <Canvas x:Name="InputCanvas" ClipToBounds="True" SizeChanged="InputCanvasResized" MouseMove="InputCanvasHover" MouseLeave="InputCanvasLeave">
                   <local:InputOverlay x:Name="PlaybackInputs" Cursor="SizeAll" MouseLeftButtonDown="InputLayerDown" MouseMove="InputLayerMove" MouseLeftButtonUp="InputLayerUp" Visibility="Collapsed"/>

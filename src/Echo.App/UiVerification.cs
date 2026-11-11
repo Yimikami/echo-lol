@@ -66,6 +66,7 @@ public partial class MainWindow
             ClipList.SelectedIndex = 0; PrepareVerificationPreview();
             Check("watching starts without trim controls", !_trimOpen && Inspector.Visibility == Visibility.Collapsed && TrimWorkbench.Visibility == Visibility.Collapsed);
             Check("normal playback always shows activity navigation", PlaybackActivityPanel.Visibility==Visibility.Visible&&Seek.Visibility==Visibility.Collapsed&&PlaybackActivity.End>PlaybackActivity.Start);
+            VerifyPlaybackScrubbing(Check);
             ToggleTrimClick(this, new()); Check("trim is an explicit optional action", _trimOpen && Inspector.Visibility == Visibility.Visible);
             Check("selecting a real clip opens the editor", _selected != null && EditorPanel.Visibility == Visibility.Visible && LibraryPanel.Visibility == Visibility.Collapsed);
             VolumeSlider.Value = .35; Check("volume controls media volume", Math.Abs(Player.Volume - .35) < .001);

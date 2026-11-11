@@ -66,7 +66,7 @@ public partial class MainWindow
     }
     private void RefreshInputTimer()
     {
-        _inputTimer.IsEnabled = _playing && _selected != null && _hasInputData && _inputPreset.Enabled
+        _inputTimer.IsEnabled = _playing && !_seeking && _selected != null && _hasInputData && _inputPreset.Enabled
             && !_inputPreset.Collapsed && WindowState != WindowState.Minimized;
     }
     private void UpdateInputState(double position)
