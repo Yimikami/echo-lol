@@ -30,6 +30,7 @@ internal static class MediaPreparation
         var session = JsonStore.Read<Session>(metadata) ?? throw new IOException("Session metadata is unavailable.");
         if (session.EndedAt == null) return;
         var folder = Path.GetDirectoryName(metadata)!; var options = session.RecordingOptions ?? new EchoSettings();
+        if (session.Mode == RecordingMode.Clips) AssembleFights(metadata, session, folder, cancel);
         if (session.RecordingPath is { } raw && raw.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && File.Exists(raw))
         {
             if (cancel()) throw new OperationCanceledException();
@@ -71,4 +72,41 @@ internal static class MediaPreparation
         }
         session.PreparationPending = false; JsonStore.Write(metadata, session);
     }
+    private static void AssembleFights(string metadata, Session session, string folder, Func<bool> cancel)
+    {
+        foreach (var group in ReplayAssembly.Groups(session.Clips))
+        {
+            if (cancel()) throw new OperationCanceledException();
+            var start = group.Min(c => c.RecordingOrigin + c.Start);
+            var end = group.Max(c => c.RecordingOrigin + c.End);
+            var parts = ReplayAssembly.Parts(group, MediaTools.Duration);
+            var first = group[0];
+            var output = parts.Count == 1 ? parts[0].Path
+                : Path.Combine(folder, first.Id + "-fight-" + group[^1].Id + ".mp4");
+            if (parts.Count > 1) MediaTools.JoinReplays(parts, output, session.Encoder, cancel);
+            var fileStart = parts.Count == 1 ? parts[0].Start : 0;
+            var events = session.Moments.Where(m => m.RecordingTime >= start && m.RecordingTime <= end)
+                .DistinctBy(m => (m.EventId, m.Kind)).ToList();
+            var merged = first with
+            {
+                Path = output, Start = fileStart, End = fileStart + end - start, RecordingOrigin = start - fileStart,
+                Label = events.Count > 0 ? new ClipRange(start, end, events).Label : string.Join(" · ", group.Select(c => c.Label).Distinct()),
+                ThumbnailPath = Path.Combine(folder, first.Id + "-fight.jpg"),
+                EventIds = events.Select(m => m.EventId).Distinct().ToArray(), Favorite = group.Any(c => c.Favorite),
+                Tags = group.SelectMany(c => c.Tags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            };
+            var index = session.Clips.IndexOf(first);
+            session.Clips.RemoveAll(c => group.Contains(c));
+            session.Clips.Insert(index, merged);
+            // Publish the complete video and metadata before retiring buffers owned by this session.
+            JsonStore.Write(metadata, session);
+            foreach (var source in group.Select(c => c.Path).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (session.Clips.Any(c => string.Equals(c.Path, source, StringComparison.OrdinalIgnoreCase))) continue;
+                if (!string.Equals(Path.GetDirectoryName(Path.GetFullPath(source)), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase)) continue;
+                try { File.Delete(source); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+    }
+
 }

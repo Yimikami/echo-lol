@@ -102,6 +102,52 @@ internal static class MediaTools
         : encoder?.Contains("qsv", StringComparison.OrdinalIgnoreCase) == true
         ? ["-c:v", "h264_qsv", "-preset", "fast", "-global_quality", "20"]
         : ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "20"];
+    internal static void JoinReplays(IReadOnlyList<Echo.Core.ReplayPart> parts, string output, string? encoder, Func<bool> cancel)
+    {
+        var expected = parts.Sum(p => p.Duration);
+        if (File.Exists(output))
+        {
+            if (Math.Abs(Duration(output) - expected) > .25) throw new InvalidDataException("The assembled replay has an unexpected duration.");
+            return;
+        }
+        var work = output + "." + Guid.NewGuid().ToString("N") + ".work";
+        var partial = output + "." + Guid.NewGuid().ToString("N") + ".partial";
+        Directory.CreateDirectory(work);
+        try
+        {
+            var streams = AudioStreamCount(parts[0].Path);
+            var files = new List<string>();
+            for (var i = 0; i < parts.Count; i++)
+            {
+                if (cancel()) throw new OperationCanceledException();
+                var part = parts[i];
+                if (AudioStreamCount(part.Path) != streams) throw new InvalidDataException("Replay audio tracks differ.");
+                var target = Path.Combine(work, i + ".mp4");
+                var args = new List<string> { "-hide_banner", "-v", "error", "-n", "-threads", "1",
+                    "-ss", part.Start.ToString("0.######", CultureInfo.InvariantCulture), "-i", part.Path,
+                    "-t", part.Duration.ToString("0.######", CultureInfo.InvariantCulture), "-map", "0:v:0", "-map", "0:a?",
+                    "-filter_threads", "1" };
+                args.AddRange(VideoArguments(encoder));
+                args.AddRange(["-c:a", "aac", "-b:a", "192k", target]);
+                Run("ffmpeg", args, Math.Max(180, (int)(part.Duration * 8)), cancel: cancel);
+                files.Add($"file '{i}.mp4'");
+            }
+            var list = Path.Combine(work, "parts.txt");
+            File.WriteAllLines(list, files);
+            Run("ffmpeg", ["-hide_banner", "-v", "error", "-n", "-f", "concat", "-safe", "1", "-i", list,
+                "-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", "-f", "mp4", partial], 180, cancel: cancel);
+            if (Math.Abs(Duration(partial) - expected) > Math.Max(.25, parts.Count * .05))
+                throw new InvalidDataException("Assembled replay duration did not match the fight.");
+            if (cancel()) throw new OperationCanceledException();
+            File.Move(partial, output);
+        }
+        finally
+        {
+            File.Delete(partial);
+            Directory.Delete(work, true);
+        }
+    }
+
     public static string RemoveGaps(string source, string output, IReadOnlyList<Echo.Core.TimeRange> parts, string? encoder, Func<bool> cancel)
     {
         if (File.Exists(output)) { _ = Duration(output); return output; }

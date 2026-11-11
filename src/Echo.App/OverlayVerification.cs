@@ -71,6 +71,48 @@ internal static class OverlayVerification
         MediaTools.Run("ffmpeg", ["-hide_banner", "-v", "error", "-y", "-i", clip.Path, "-f", "lavfi", "-i", "sine=frequency=880:duration=4",
             "-map", "0:v:0", "-map", "0:a:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", input]);
         var source = clip with { Path = input };
+        var fightFolder = Path.Combine(root, "fight-assembly");
+        Directory.CreateDirectory(fightFolder);
+        var firstReplay = Path.Combine(fightFolder, "first.mp4");
+        var secondReplay = Path.Combine(fightFolder, "second.mp4");
+        File.Copy(input, firstReplay, true); File.Copy(input, secondReplay, true);
+        var fight = new Session { Duration = 6, EndedAt = DateTimeOffset.UtcNow, Mode = RecordingMode.Clips,
+            Encoder = session.Encoder, RecordingOptions = new() { RemoveMaskedHighlights = false }, PreparationPending = true };
+        fight.Moments.AddRange([new(10, MomentKind.Assist, 1, 1), new(11, MomentKind.Assist, 2.5, 2.5), new(12, MomentKind.Kill, 4.5, 4.5)]);
+        fight.Clips.AddRange([new("first", firstReplay, .25, 3, "2 × Assist", false),
+            new("second", secondReplay, .5, 3, "Kill", false, 2)]);
+        var metadata = Path.Combine(fightFolder, "session.json");
+        JsonStore.Write(metadata, fight);
+        var preparation = System.Reflection.Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Echo.Recorder.dll"))
+            .GetType("Echo.Recorder.MediaPreparation")!.GetMethod("Prepare", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        await Task.Run(() => preparation.Invoke(null, [metadata, (Func<bool>)(() => false)]));
+        var assembled = JsonStore.Read<Session>(metadata)!;
+        var joined = assembled.Clips.Single();
+        check("replay preparation publishes one fight with all event markers", !assembled.PreparationPending &&
+            joined.EventIds!.Length == 3 && Math.Abs(joined.RecordingOrigin - .25) < .01 &&
+            Math.Abs(MediaTools.Duration(joined.Path) - 4.75) < .2);
+        check("joined fights retain both audio tracks and retire superseded buffers",
+            MediaTools.AudioStreamCount(joined.Path) == 2 && !File.Exists(firstReplay) && !File.Exists(secondReplay));
+        var singleFolder = Path.Combine(root, "fight-single-buffer");
+        Directory.CreateDirectory(singleFolder);
+        var singleSource = Path.Combine(singleFolder, "buffer.mp4");
+        File.Copy(input, singleSource, true);
+        var singleHash = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(singleSource));
+        var sameBuffer = new Session { Duration = 4, EndedAt = DateTimeOffset.UtcNow, Mode = RecordingMode.Clips,
+            Encoder = session.Encoder, RecordingOptions = new() { RemoveMaskedHighlights = false } };
+        sameBuffer.Clips.AddRange([new("a", singleSource, .25, 1.5, "Assist", false), new("b", singleSource, 1, 3, "Kill", false)]);
+        var singleMetadata = Path.Combine(singleFolder, "session.json");
+        JsonStore.Write(singleMetadata, sameBuffer);
+        await Task.Run(() => preparation.Invoke(null, [singleMetadata, (Func<bool>)(() => false)]));
+        var reused = JsonStore.Read<Session>(singleMetadata)!.Clips.Single();
+        check("one covering replay is reused without video rendering", reused.Path == singleSource && reused.Start == .25 &&
+            reused.End == 3 && singleHash.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(singleSource))));
+        var joinedHash = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(joined.Path));
+        await Task.Run(() => preparation.Invoke(null, [metadata, (Func<bool>)(() => false)]));
+        check("retrying completed fight preparation is idempotent",
+            JsonStore.Read<Session>(metadata)!.Clips.Count == 1 &&
+            joinedHash.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(joined.Path))));
+
         check("separate source has two distinct audio streams", MediaTools.AudioStreamCount(input) == 2);
         foreach (var (options, size) in new (ExportOptions Options, (int Width, int Height) Size)[]
         {

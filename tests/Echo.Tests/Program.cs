@@ -38,6 +38,40 @@ Test("separated moments remain separate", () => { var p = new MomentPlanner(Sett
 Test("disabled event does not schedule", () => { var p = new MomentPlanner(Settings() with { CaptureAssists = false }); p.Add(new(1, MomentKind.Assist, 20, 20)); Check(p.Ranges.Count == 0); });
 Test("planner clamps start at zero", () => { var p = new MomentPlanner(Settings()); p.Add(new(1, MomentKind.Kill, 1, 1)); Check(p.Ranges[0].Start == 0); });
 Test("scheduler waits for tail", () => { var p = new ReplayScheduler(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); Check(p.TakeDue(27) == null); Check(p.TakeDue(28)?.End == 28); Check(p.Pending.Count == 0); });
+Test("late events join a previously saved replay without duplicating overlap", () =>
+{
+    var scheduler = new ReplayScheduler(Settings() with { BeforeSeconds = 1, AfterSeconds = 5 });
+    scheduler.Add(new(1, MomentKind.Assist, 20, 20));
+    var first = scheduler.TakeDue(25)!;
+    scheduler.Add(new(2, MomentKind.Assist, 28, 28));
+    var second = scheduler.TakeDue(33)!;
+    MediaClip[] clips = [new("a", "a.mp4", first.Start, first.End, first.Label, false),
+        new("b", "b.mp4", second.Start - 10, second.End - 10, second.Label, false, 10)];
+    var group = ReplayAssembly.Groups(clips).Single();
+    var parts = ReplayAssembly.Parts(group, path => path == "a.mp4" ? 25 : 23);
+    Check(parts.Sum(p => p.Duration) == 14 && parts.Count == 1);
+    var planner = new MomentPlanner(Settings() with { BeforeSeconds = 1, AfterSeconds = 5 });
+    planner.Add(new(1, MomentKind.Assist, 20, 20));
+    planner.Add(new(2, MomentKind.Kill, 28, 28));
+    Check(planner.Ranges.Single().Start == 19 && planner.Ranges.Single().End == 33);
+});
+Test("long replay fights retain their beginning and distant fights remain separate", () =>
+{
+    MediaClip[] clips = [new("a", "a.mp4", 5, 38, "Kill", false),
+        new("b", "b.mp4", 1, 30, "Assist", false, 36), new("c", "c.mp4", 0, 20, "Death", false, 90)];
+    var group = ReplayAssembly.Groups(clips).Single();
+    var parts = ReplayAssembly.Parts(group, _ => 40);
+    Check(group.Count == 2 && parts.Count == 2 && parts.Sum(p => p.Duration) == 61);
+    Check(parts[0].Start == 5 && parts[0].End == 40 && parts[1].Start == 4 && parts[1].End == 30);
+    Check(ReplayAssembly.Groups([clips[0], clips[1] with { DeletedAt = DateTimeOffset.UtcNow }]).Count == 0);
+});
+Test("missing replay coverage is rejected before replacing original clips", () =>
+{
+    MediaClip[] clips = [new("a", "a.mp4", 0, 10, "Kill", false), new("b", "b.mp4", 0, 10, "Assist", false, 12)];
+    bool failed = false;
+    try { ReplayAssembly.Parts(clips, _ => 10); } catch (InvalidDataException) { failed = true; }
+    Check(failed);
+});
 Test("force flush clamps unavailable tail", () => { var p = new ReplayScheduler(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); Check(p.TakeDue(22, true)?.End == 22); Check(p.Pending.Count == 0); });
 Test("long fight is split before buffer eviction", () => { var p = new ReplayScheduler(Settings()); for (int i = 20; i <= 45; i += 5) p.Add(new(i, MomentKind.Kill, i, i)); var part = p.TakeDue(42); Check(part != null && part.Start == 5 && part.End == 42); Check(p.Pending.Single().Start == 41); Check(p.TakeDue(53) != null); });
 Test("atomic session roundtrip", () => { var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-tests-" + Guid.NewGuid().ToString("N")); try { var path = Path.Combine(folder, "session.json"); var session = new Session(); JsonStore.Write(path, session); Check(JsonStore.Read<Session>(path)?.Id == session.Id); Check(!File.Exists(path + ".tmp")); } finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); } });

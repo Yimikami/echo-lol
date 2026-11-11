@@ -84,6 +84,7 @@ public sealed class EventDetector
 
 public sealed class MomentPlanner(EchoSettings settings)
 {
+    public const double MergeGapSeconds = 3;
     private readonly List<ClipRange> _ranges = [];
     public IReadOnlyList<ClipRange> Ranges => _ranges;
     public void Add(Moment moment)
@@ -96,7 +97,7 @@ public sealed class MomentPlanner(EchoSettings settings)
         for (int i = 0; i + 1 < _ranges.Count;)
         {
             var a = _ranges[i]; var b = _ranges[i + 1];
-            if (b.Start > a.End) { i++; continue; }
+            if (b.Start > a.End + MergeGapSeconds) { i++; continue; }
             _ranges[i] = new(a.Start, Math.Max(a.End, b.End), [..a.Moments, ..b.Moments]);
             _ranges.RemoveAt(i + 1);
         }
