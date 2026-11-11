@@ -42,7 +42,7 @@ internal static class Program
             ApplicationConfiguration.Initialize();
             using var shortcut = new GlobalShortcut(() => host.Enqueue("save"));
             using var appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
-            using var tray = new NotifyIcon { Text = "Echo â€” automatic League capture", Icon = appIcon ?? System.Drawing.SystemIcons.Application, Visible = true };
+            using var tray = new NotifyIcon { Text = "Echo - automatic League capture", Icon = appIcon ?? System.Drawing.SystemIcons.Application, Visible = true };
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open Echo", null, (_, _) => OpenUi(paths));
             menu.Items.Add("Save moment", null, (_, _) => host.Enqueue("save"));
@@ -72,7 +72,7 @@ internal static class Program
     {
         string? Arg(string key) { var i = Array.IndexOf(args, key); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         var seconds = int.Parse(Arg("--seconds") ?? "20");
-        if (seconds is < 3 or > 3600) throw new ArgumentException("Test duration must be 3â€“3600 seconds.");
+        if (seconds is < 3 or > 3600) throw new ArgumentException("Test duration must be 3-3600 seconds.");
         bool synthetic = args.Contains("--synthetic");
         var target = synthetic ? null : Windows.Find(Arg("--window"));
         if (!synthetic && target == null) throw new InvalidOperationException("The selected test window was not found.");

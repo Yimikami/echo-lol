@@ -54,7 +54,7 @@ internal static class InputOverlayExport
             for (double t = 0; t < length; t++)
             {
                 var at = GameplayInputs.RecordingTime(clip, start + t);
-                var label = preset.ShowApm ? hasData ? $"{playback.Apm(at)} APM" : "â€” APM" : "INPUTS";
+                var label = preset.ShowApm ? hasData ? $"{playback.Apm(at)} APM" : "\u2014 APM" : "INPUTS";
                 Draw(5, t, Math.Min(length, t + 1), OverlayArtwork.Header(label), colors.Text);
             }
         }

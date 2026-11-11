@@ -7,6 +7,6 @@
     <Deterministic>true</Deterministic>
     <Version>0.2.3</Version>
     <Authors>Echo contributors</Authors>
-    <Copyright>Copyright Â© 2026 Echo contributors</Copyright>
+    <Copyright>Copyright &#169; 2026 Echo contributors</Copyright>
   </PropertyGroup>
 </Project>
