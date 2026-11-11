@@ -20,8 +20,6 @@
   <a href="docs/images/library.jpg"><img src="docs/images/library.jpg" width="960" alt="Echo library with champion artwork, highlights, event markers and recent captures" /></a>
 </p>
 
-<p align="center"><sub>Screenshots show the current development build.</sub></p>
-
 ## Play. Echo handles the recording.
 
 1. Install **Echo-Setup** from the [latest release](https://github.com/Yimikami/echo-lol/releases/latest), or extract the portable ZIP and open **Echo.exe**.
