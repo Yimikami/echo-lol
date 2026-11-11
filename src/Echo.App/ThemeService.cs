@@ -20,25 +20,25 @@ internal static class ThemeService
 
         var colors = new (string Key, string Dark, string Light)[]
         {
-            ("BackgroundBrush", "#0D0F10", "#F0EFF5"),
-            ("SidebarBrush", "#090B0B", "#E7E5F0"),
-            ("PanelBrush", "#1B1D1F", "#FFFFFF"),
-            ("RaisedBrush", "#25282B", "#EAE7F1"),
-            ("LineBrush", "#33373B", "#CFC9DF"),
-            ("TextBrush", "#F6F8F9", "#1E1B2E"),
-            ("SecondaryBrush", "#AEB5BD", "#534C69"),
+            ("BackgroundBrush", "#0B0D0E", "#F0EFF5"),
+            ("SidebarBrush", "#08090A", "#E7E5F0"),
+            ("PanelBrush", "#15181A", "#FFFFFF"),
+            ("RaisedBrush", "#1E2326", "#EAE7F1"),
+            ("LineBrush", "#2A3034", "#CFC9DF"),
+            ("TextBrush", "#E9EDEF", "#1E1B2E"),
+            ("SecondaryBrush", "#A4ADB5", "#534C69"),
             ("AccentBrush", "#C5F65B", "#395B0B"),
             ("AccentTextBrush", "#172305", "#FFFFFF"),
-            ("AccentSurfaceBrush", "#2C361F", "#DFEDCA"),
+            ("AccentSurfaceBrush", "#232D17", "#DFEDCA"),
             ("KillBrush", "#C5F65B", "#365B08"),
             ("AssistBrush", "#83DFDF", "#006A70"),
-            ("DeathBrush", "#FFA2AF", "#9E263F"),
+            ("DeathBrush", "#FF8FA0", "#9E263F"),
             ("FavoriteBrush", "#E2C3FF", "#624099"),
-            ("NavigationBrush", "#231739", "#E4DAF6"),
-            ("NavigationActiveBrush", "#6413E9", "#5424AE"),
-            ("NavigationTextBrush", "#FFFFFF", "#FFFFFF"),
-            ("ActivityBrush", "#EF58C7", "#A21979"),
-            ("StripTrackBrush", "#3B4248", "#D9D1E5")
+            ("NavigationBrush", "#222D16", "#E0ECD1"),
+            ("NavigationActiveBrush", "#C5F65B", "#395B0B"),
+            ("NavigationTextBrush", "#172305", "#FFFFFF"),
+            ("ActivityBrush", "#C5F65B", "#395B0B"),
+            ("StripTrackBrush", "#2F373C", "#D9D1E5")
         };
         foreach (var (key, dark, bright) in colors)
         {

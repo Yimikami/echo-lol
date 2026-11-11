@@ -12,13 +12,13 @@ WPF UI 4.3.0 is copyright Leszek Pomianowski and contributors, licensed MIT. Its
 
 Phosphor Core regular icons are copyright Phosphor Icons and licensed MIT. Exact upstream SVG assets and their commit are retained under `assets/icons/phosphor/`; the UI uses a format conversion into WPF geometries. See `assets/licenses/Phosphor-LICENSE.txt` and https://github.com/phosphor-icons/core.
 
-Manrope is copyright the Manrope Project Authors and licensed SIL OFL 1.1. The original Google Fonts variable font is retained in `assets/font-source/`; 400/500/600/700 static instances are embedded in the UI. See `assets/licenses/Manrope-OFL.txt`, `assets/design-provenance.json` and https://github.com/google/fonts/tree/main/ofl/manrope. No system-wide font installation is required.
+Manrope is copyright the Manrope Project Authors and licensed SIL OFL 1.1. The original Google Fonts variable font is retained in `assets/font-source/`; 400/500/600/700 static instances are retained as legacy design assets and are no longer embedded in the application. Interface text uses the Segoe UI font supplied by Windows. See `assets/licenses/Manrope-OFL.txt`, `assets/design-provenance.json` and https://github.com/google/fonts/tree/main/ofl/manrope. No system-wide font installation is required.
 
 Bebas Neue is copyright © 2010 Dharma Type, licensed SIL OFL 1.1. The unmodified font is embedded for input-overlay lettering. See `assets/licenses/BebasNeue-OFL.txt` and https://github.com/google/fonts/tree/main/ofl/bebasneue. Keyboard and mouse contours are original vector artwork, inspired by the user's visual references; no input-overlay project code or texture atlas is incorporated.
 
 The settings gameplay preview is a frame from Riot Games' official League of Legends “How to Play” / “Earn Gold” video, copyright Riot Games. It is used only as a positioning reference and is not covered by Echo's source-code license. Source URL, timestamp and checksum are retained in `assets/brand/game-preview-provenance.json`.
 
-Champion portraits, splash art, the Jinx onboarding illustration and champion names come from Riot Games' Data Dragon. The bundled illustration is the base Jinx loading art at https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Jinx_0.jpg. The English and Turkish name catalogue comes from Data Dragon 16.22.1. Riot's artwork is outside Echo's source-code license. See https://developer.riotgames.com/docs/lol#data-dragon.
+Champion portraits, splash art, the Jinx onboarding illustration and champion names come from Riot Games' Data Dragon. The bundled illustration is Star Guardian Jinx loading art at https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Jinx_4.jpg. The English and Turkish name catalogue comes from Data Dragon 16.22.1. Riot's artwork is outside Echo's source-code license. See https://developer.riotgames.com/docs/lol#data-dragon.
 
 .NET and WPF are Microsoft projects under the MIT license. Official Windows packages include the .NET Desktop Runtime.
 

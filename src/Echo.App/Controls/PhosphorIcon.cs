@@ -13,6 +13,22 @@ public sealed class PhosphorIcon : Control
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (TryFindResource("Reference." + Kind) is Geometry outline || TryFindResource("ReferenceFill." + Kind) is Geometry)
+        {
+            var bounds = Math.Min(ActualWidth, ActualHeight);
+            dc.PushTransform(new TranslateTransform((ActualWidth - bounds) / 2, (ActualHeight - bounds) / 2));
+            dc.PushTransform(new ScaleTransform(bounds / 24, bounds / 24));
+            var pen = new Pen(Foreground, 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+            if (TryFindResource("Reference." + Kind) is Geometry stroke) dc.DrawGeometry(null, pen, stroke);
+            if (TryFindResource("ReferenceFill." + Kind) is Geometry fill) dc.DrawGeometry(Foreground, null, fill);
+            if (Kind == "Settings")
+            {
+                pen.DashStyle = new DashStyle([1.72, 1.33], 0);
+                dc.DrawEllipse(null, pen, new Point(12, 12), 8.5, 8.5);
+            }
+            dc.Pop(); dc.Pop();
+            return;
+        }
         if (TryFindResource("Phosphor." + Kind) is not Geometry geometry) return;
         var size = Math.Min(ActualWidth, ActualHeight);
         dc.PushTransform(new TranslateTransform((ActualWidth - size) / 2, (ActualHeight - size) / 2));

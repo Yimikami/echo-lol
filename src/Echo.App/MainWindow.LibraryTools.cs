@@ -341,8 +341,12 @@ public partial class MainWindow
         panel.Children.Add(new TextBlock { Text = $"{Size(usage.ActiveBytes)} in recordings · {Size(usage.TrashBytes)} in Trash", Margin = new(0, 0, 0, 10) });
         var limit = new TextBox { Text = _settings.LibraryLimitMegabytes.ToString(), MaxLength = 8 };
         AddField(panel, "Recording limit in MiB (0 for unlimited)", limit);
-        var auto = new CheckBox { Content = "Automatically clean up after matches", IsChecked = _settings.AutoManageLibrary, Margin = new(0, 12, 0, 0) };
-        panel.Children.Add(auto);
+        var auto = new CheckBox { Style = (Style)FindResource("Switch"), IsChecked = _settings.AutoManageLibrary, VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Automation.AutomationProperties.SetName(auto, "Automatically clean up after matches");
+        var cleanup = new DockPanel { Margin = new(0, 18, 0, 0) };
+        DockPanel.SetDock(auto, Dock.Right); cleanup.Children.Add(auto);
+        cleanup.Children.Add(new TextBlock { Text = "Automatically clean up after matches", TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 16, 0) });
+        panel.Children.Add(cleanup);
         panel.Children.Add(new TextBlock { Text = "Cleanup permanently removes the oldest unprotected sessions. Favorited recordings and sessions with favorited clips are kept.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 0, 0) });
         if (!ShowToolDialog("Storage and cleanup", panel, "Apply")) return;
         if (!long.TryParse(limit.Text, out var megabytes)) { ShowToast("Enter a whole number in MiB."); return; }
@@ -413,12 +417,19 @@ public partial class MainWindow
     {
         var dialog = new Window { Owner = this, Title = title, Width = width, SizeToContent = SizeToContent.Height,
             MaxHeight = Math.Max(420, SystemParameters.WorkArea.Height * .88), WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, UseLayoutRounding = true };
+            ResizeMode = ResizeMode.NoResize, WindowStyle = WindowStyle.None, ShowInTaskbar = false, UseLayoutRounding = true };
         dialog.SetResourceReference(BackgroundProperty, "PanelBrush");
         dialog.SetResourceReference(ForegroundProperty, "TextBrush");
         dialog.SetResourceReference(FontFamilyProperty, "StudioFont");
-        var layout = new DockPanel { Margin = new(24, 18, 24, 20) };
-        var heading = new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 10) };
+        dialog.UseLayoutRounding = true;
+        System.Windows.Media.TextOptions.SetTextFormattingMode(dialog, TextFormattingMode.Display);
+        System.Windows.Media.TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Grayscale);
+        var layout = new DockPanel { Margin = new(28, 24, 28, 24) };
+        var heading = new DockPanel { Margin = new(0, 0, 0, 20), LastChildFill = true };
+        var close = new Button { Style = (Style)FindResource("IconButton"), Content = new Controls.PhosphorIcon { Kind = "Close" }, IsCancel = true, ToolTip = "Close" };
+        DockPanel.SetDock(close, Dock.Right); heading.Children.Add(close);
+        heading.Children.Add(new TextBlock { Text = title, Style = (Style)FindResource("DisplayHeading"), FontSize = 38 });
+        heading.MouseLeftButtonDown += (_, e) => { if (e.OriginalSource is TextBlock && e.LeftButton == System.Windows.Input.MouseButtonState.Pressed) dialog.DragMove(); };
         DockPanel.SetDock(heading, Dock.Top);
         layout.Children.Add(heading);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 16, 0, 0) };
@@ -430,7 +441,7 @@ public partial class MainWindow
         buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, Margin = new(0, 0, 8, 0) });
         buttons.Children.Add(accept);
         layout.Children.Add(new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        dialog.Content = layout;
+        dialog.Content = new Border { Child = layout, BorderThickness = new(1), BorderBrush = (Brush)FindResource("LineBrush") };
         return dialog.ShowDialog() == true;
     }
 }

@@ -20,15 +20,46 @@ public partial class MainWindow
     private readonly ConcurrentDictionary<(string Path, long Modified, long Length, double Duration), double> _apmCache = new();
     private Comparison? _apmComparison;
 
+    private void EditorViewportChanged(object sender, SizeChangedEventArgs e) => SizeReviewPanels();
+
+    private void SizeReviewPanels()
+    {
+        var right = Editor.ActualWidth >= 1180 ? 342 : 291;
+        InspectorColumn.Width = new GridLength(_trimOpen && !_fullscreen ? right : 0);
+        ReviewColumn.Width = new GridLength(!_trimOpen && !_fullscreen ? right : 0);
+        Editor.RowDefinitions[1].Height = new GridLength(_trimOpen && !_fullscreen ? (Editor.ActualHeight >= 700 ? 206 : 176) : 0);
+    }
+
     private void UpdateActivityVisibility()
     {
-        bool visible = !_trimOpen || _fullscreen;
-        PlaybackActivityPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        PlayerDock.RowDefinitions[1].Height = new(visible ? 148 : 22);
-        Seek.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
-        bool showIndex = !_trimOpen && !_fullscreen;
-        ReviewDesk.Visibility = showIndex ? Visibility.Visible : Visibility.Collapsed;
-        ReviewColumn.Width = new GridLength(showIndex ? 278 : 0);
+        bool trimming = _trimOpen && !_fullscreen;
+        Inspector.Visibility = TrimWorkbench.Visibility = trimming ? Visibility.Visible : Visibility.Collapsed;
+        PlaybackActivityPanel.Visibility = trimming ? Visibility.Collapsed : Visibility.Visible;
+        PlayerDock.RowDefinitions[1].Height = new(trimming ? 0 : 163);
+        Seek.Visibility = Visibility.Collapsed;
+        ReviewDesk.Visibility = !_trimOpen && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
+        SizeReviewPanels();
+        UpdateVideoContext();
+    }
+
+    private ReviewEvent? _reviewedEvent;
+
+    private void UpdateVideoContext()
+    {
+        VideoContextBadge.Visibility = !_fullscreen && (_trimOpen || _reviewedEvent != null) ? Visibility.Visible : Visibility.Collapsed;
+        VideoContextText.Text = _trimOpen
+            ? $"Preview · {Time(Timeline.SelectionStart)} to {Time(Timeline.SelectionEnd)}"
+            : _reviewedEvent is { } item ? $"{item.Label} · {item.Stamp}" : "";
+    }
+
+    private void BookmarkClipClick(object sender, RoutedEventArgs e)
+    {
+        if (_selected is { } item) AddReviewMoment(item, saveClip: false);
+    }
+
+    private void TrimFormatChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (TrimHud != null) TrimHud.IsEnabled = TrimFormat.SelectedIndex == 2;
     }
 
     private void SetTimelineMoments(ClipItem item)
@@ -41,13 +72,18 @@ public partial class MainWindow
         var events = mapped.Where(m => m.Time!.Value >= item.Clip.Start && m.Time.Value <= item.Clip.End)
             .Select(m => new ReviewEvent(m.Moment.RecordingTime, m.Moment.Label, MomentGlyph.For(m.Moment.Kind),
                 (Brush)FindResource(MomentGlyph.BrushFor(m.Moment.Kind)), Time(m.Time!.Value - item.Clip.Start, item.Clip.End - item.Clip.Start < 10))).ToArray();
+        _reviewedEvent = null;
+        UpdateVideoContext();
         ReviewEvents.ItemsSource = events;
         EmptyReviewEvents.Visibility = events.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ReviewEventClick(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { DataContext: ReviewEvent row }) PreviewMoment(row.RecordingTime);
+        if (sender is not Button { DataContext: ReviewEvent row }) return;
+        _reviewedEvent = row;
+        UpdateVideoContext();
+        PreviewMoment(row.RecordingTime);
     }
 
     private void RefreshPlaybackActivity()

@@ -14,6 +14,81 @@ EventDetector Detector()
     using var initial = JsonDocument.Parse("{\"activePlayer\":{\"riotId\":\"Echo#123\",\"riotIdGameName\":\"Echo\"},\"allPlayers\":[{\"riotId\":\"Echo#123\",\"summonerName\":\"Legacy\"}],\"Events\":[]}");
     detector.Identify(initial.RootElement); detector.Consume(initial.RootElement, 0, 0, true); return detector;
 }
+Test("quality recommendation is conservative for unknown and shared graphics", () =>
+{
+    Check(QualityRecommendation.For(new("Unknown", 0, 0, 2, 0, 0, false)) is { Height: 720, Fps: 30 });
+    Check(QualityRecommendation.For(new("Integrated", 128, 16000, 12, 1920, 1080, true)) is { Height: 720, Fps: 30 });
+});
+Test("quality recommendation respects display and memory limits", () =>
+{
+    Check(QualityRecommendation.For(new("GPU", 8000, 32000, 12, 2560, 1440, true)) is { Height: 1080, Fps: 60 });
+    Check(QualityRecommendation.For(new("GPU", 8000, 32000, 12, 1366, 768, true)) is { Height: 720, Fps: 60 });
+    Check(QualityRecommendation.For(new("GPU", 2000, 8000, 4, 1920, 1080, true)) is { Height: 1080, Fps: 30 });
+    Check(QualityRecommendation.For(new("GPU", 8000, 4000, 4, 1920, 1080, true)) is { Height: 720, Fps: 30 });
+});
+Test("every suggested quality produces valid recording settings", () =>
+{
+    foreach (var height in new[] { 720, 1080 })
+    foreach (var fps in new[] { 30, 60 })
+    {
+        var q = new QualityRecommendation(height, fps, "");
+        (Settings() with { Width = q.Width, Height = height, Fps = fps, BitrateKbps = q.BitrateKbps }).FitReplayBuffer().Validate();
+    }
+});
+Test("event toggles follow global clip lengths without losing custom lengths", () =>
+{
+    var settings = (Settings() with { HighlightRules = new() { [MomentKind.Dragon] = new(true, 30, 12) } })
+        .WithCaptureChoices([new(MomentKind.Baron, false), new(MomentKind.Dragon, false)]);
+    settings = settings with { BeforeSeconds = 22, AfterSeconds = 9 };
+    Check(settings.Rule(MomentKind.Baron) is { Enabled: false, Before: 22, After: 9 });
+    Check(settings.Rule(MomentKind.Dragon) is { Enabled: false, Before: 30, After: 12 });
+    settings = settings.WithCaptureChoices([new(MomentKind.Baron, true), new(MomentKind.Dragon, true)]);
+    Check(settings.Rule(MomentKind.Baron) is { Enabled: true, Before: 22 });
+    Check(settings.Rule(MomentKind.Dragon) is { Enabled: true, Before: 30 });
+    settings.FitReplayBuffer().Validate();
+});
+Test("all event choices persist through settings serialization", () =>
+{
+    var choices = Enum.GetValues<MomentKind>().Where(k => k != MomentKind.Manual).Select(k => new KeyValuePair<MomentKind, bool>(k, false));
+    var settings = JsonSerializer.Deserialize<EchoSettings>(JsonSerializer.Serialize(Settings().WithCaptureChoices(choices), JsonStore.Options), JsonStore.Options)!;
+    Check(choices.All(pair => !settings.Captures(pair.Key)) && settings.Captures(MomentKind.Manual));
+    Check(!settings.CaptureKills && !settings.CaptureAssists && !settings.CaptureDeaths);
+});
+Test("placement preview chooses newest ready footage independent of library ordering", () =>
+{
+    var file = Path.Combine(Path.GetTempPath(), "echo-preview-" + Guid.NewGuid().ToString("N") + ".mp4");
+    File.WriteAllText(file, "source-selection fixture");
+    try
+    {
+        var older = new Session { Id = "old", StartedAt = DateTimeOffset.UtcNow.AddDays(-2), EndedAt = DateTimeOffset.UtcNow };
+        older.Clips.Add(new("old-clip", file, 0, 10, "Kill", false));
+        var latest = new Session { Id = "new", StartedAt = DateTimeOffset.UtcNow.AddDays(-1), EndedAt = DateTimeOffset.UtcNow };
+        latest.Clips.AddRange([new("earlier", file, 0, 12, "Assist", false), new("later", file, 30, 50, "Kill", false)]);
+        Check(PlacementPreviewSource.Latest([older, latest]) is { SessionId: "new", ClipId: "later", At: 33 });
+        latest.PreparationPending = true;
+        Check(PlacementPreviewSource.Latest([latest, older])?.SessionId == "old");
+        latest.PreparationPending = false; latest.DeletedAt = DateTimeOffset.UtcNow;
+        Check(PlacementPreviewSource.Latest([latest, older])?.SessionId == "old");
+        older.Clips[0] = older.Clips[0] with { VideoUnavailable = true };
+        Check(PlacementPreviewSource.Latest([older, latest]) == null);
+    }
+    finally { File.Delete(file); }
+});
+Test("placement preview can use a completed full match and keeps short seeks in range", () =>
+{
+    var file = Path.Combine(Path.GetTempPath(), "echo-preview-" + Guid.NewGuid().ToString("N") + ".mp4");
+    File.WriteAllText(file, "source-selection fixture");
+    try
+    {
+        var match = new Session { Id = "match", EndedAt = DateTimeOffset.UtcNow, RecordingPath = file, Duration = 1 };
+        Check(PlacementPreviewSource.Latest([match]) is { ClipId: "match", At: .5 });
+        match.Clips.Add(new("short", file, .2, .4, "Assist", false));
+        Check(Math.Abs(PlacementPreviewSource.Latest([match])!.At - .3) < .001);
+        match.EndedAt = null;
+        Check(PlacementPreviewSource.Latest([match]) == null);
+    }
+    finally { File.Delete(file); }
+});
 Test("default audio is game only", () => { var s = Settings(); Check(s.GameAudio && !s.DesktopAudio && !s.Microphone); });
 Test("valid defaults", () => Settings().Validate());
 Test("reject insufficient replay memory", () => Throws(() => (Settings() with { BufferMegabytes = 32, BitrateKbps = 50000 }).Validate()));

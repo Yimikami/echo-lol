@@ -6,6 +6,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -35,7 +36,7 @@ public partial class MainWindow : Window
     private bool _bindingGallery, _trimOpen, _settingsDirty;
     private readonly DispatcherTimer _settingsTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private const int GalleryPageSize = 32;
-    private string _settingsCategory = "Recording";
+    private string _settingsCategory = "General";
     private readonly SemaphoreSlim _filmstripLock = new(1, 1);
 
     public MainWindow(HostPaths paths, bool startRecorder)
@@ -103,10 +104,8 @@ public partial class MainWindow : Window
             var status = JsonStore.Read<RecorderStatus>(_paths.Status);
             bool fresh = status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8);
             _status = fresh ? status! : new() { State = "Recorder offline", UpdatedAt = DateTimeOffset.MinValue };
-            HeaderStatus.Text = _status.Recording ? (_status.ActiveMode == RecordingMode.FullMatch ? "Full match " : "Highlights ") + Time(_status.ElapsedSeconds) : !fresh ? "Capture offline" : _status.Error != null ? "Capture needs attention" : _status.Armed ? "Auto capture on" : "Capture paused";
-            StatusDot.SetResourceReference(Shape.FillProperty, _status.Recording ? "DeathBrush" : fresh && _status.Armed ? "AccentBrush" : "SecondaryBrush");
             CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
-            CaptureGlyph.Kind = _status.Armed ? "Recording" : "Play";
+            CaptureGlyph.Kind = _status.Armed ? "Pause" : "Play";
             RecorderLabel.Text = !fresh ? "Offline" : _status.Recording ? "REC" : _status.Armed ? "Auto" : "Paused";
             ErrorBanner.Text = _status.Error ?? "";
             ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
@@ -218,14 +217,14 @@ public partial class MainWindow : Window
         if (LibraryAside == null) return;
         bool showDesk = _libraryView == 0 && _filter == "All" && !_selecting && _galleryPage == 0 &&
             SortBox.SelectedIndex == 0 && unsearched && items.Count > 0;
-        var featured = showDesk ? items.FirstOrDefault(item => item.IsReady) : null;
+        var featured = showDesk && !_matches ? items.FirstOrDefault(item => item.IsReady) : null;
         FeaturedPanel.DataContext = featured;
         FeaturedPanel.Visibility = featured == null ? Visibility.Collapsed : Visibility.Visible;
-        FeaturedLabel.Text = _matches ? "LATEST MATCH" : "LATEST HIGHLIGHT";
+        FeaturedLabel.Text = _matches ? "Latest match" : "Latest highlight";
         FeaturedPlayLabel.Text = _matches ? "Play match" : "Play clip";
 
-        LibraryAsideColumn.Width = new GridLength(showDesk ? 268 : 0);
-        LibraryGutter.Width = new GridLength(showDesk ? 18 : 0);
+        LibraryAsideColumn.Width = new GridLength(showDesk ? (LibraryPanel.ActualWidth >= 1160 ? 300 : 258) : 0);
+        LibraryGutter.Width = new GridLength(showDesk ? 24 : 0);
         LibraryAside.Visibility = showDesk ? Visibility.Visible : Visibility.Collapsed;
         if (!showDesk) return;
 
@@ -253,17 +252,24 @@ public partial class MainWindow : Window
     private void LibraryViewportChanged(object sender, SizeChangedEventArgs e)
     {
         if (FeaturedPanel == null) return;
-        bool compact = e.NewSize.Height < 620;
-        FeaturedPanel.Height = compact ? 178 : 224;
-        FeaturedTitle.FontSize = compact ? 32 : 40;
+        bool compact = e.NewSize.Height < 615;
+        FeaturedPanel.Height = compact ? 267 : e.NewSize.Height >= 850 ? 372 : 326;
+        FeaturedTitle.FontSize = compact ? 65 : e.NewSize.Height >= 850 ? 108 : 88;
+        FeaturedTitle.LineHeight = FeaturedTitle.FontSize * 1.04;
+        FeaturedStrip.Visibility = e.NewSize.Width >= 730 ? Visibility.Visible : Visibility.Collapsed;
+        if (LibraryAside.Visibility == Visibility.Visible)
+        {
+            var width = LibraryPanel.ActualWidth >= 1160 ? 300 : 258;
+            if (LibraryAsideColumn.Width.Value != width) LibraryAsideColumn.Width = new(width);
+        }
     }
 
     private void GalleryWidthChanged(object sender, SizeChangedEventArgs e) => UpdateGallerySizing();
 
     private void UpdateGallerySizing()
     {
-        var width = Math.Max(400, ClipList.ActualWidth - 18);
-        var columns = _matches ? 2 : Math.Clamp((int)(width / 258), 2, 5);
+        var width = Math.Max(240, ClipList.ActualWidth);
+        var columns = _matches ? (width < 490 ? 1 : 2) : Math.Clamp((int)(width / 222), 1, 5);
         var tile = Math.Floor(width / columns) - 14;
         ClipList.Resources["GalleryTileWidth"] = tile;
         ClipList.Resources["GalleryThumbnailHeight"] = (tile - 2) * 9 / 16;
@@ -331,12 +337,12 @@ public partial class MainWindow : Window
         SetTimelineMoments(item);
         if (_selected?.Entry == item.Entry && _selected.Clip.Path == item.Clip.Path)
         {
-            _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Subtitle; return;
+            _selected = item; SelectedTitle.Text = item.Title; SelectedDetails.Text = item.Subtitle + "   ·   " + item.Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy, HH:mm", CultureInfo.InvariantCulture); return;
         }
         _selectionVersion++; _selected = item; _duration = 0; SetPlaying(false); Player.Close(); EmptyPlayer.Visibility = Visibility.Collapsed;
         LoadInputData(item);
         BeginApmComparison(item);
-        SelectedTitle.Text = item.Title; SelectedDetails.Text = item.DateLabel + "   ·   " + item.Subtitle;
+        SelectedTitle.Text = item.Title; SelectedDetails.Text = item.Subtitle + "   ·   " + item.Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy, HH:mm", CultureInfo.InvariantCulture);
         Timeline.Frames = item.Thumbnail == null ? [] : [item.Thumbnail]; Timeline.Duration = 0; Timeline.InvalidateVisual();
         PlayerPoster.Source = item.Thumbnail; PlayerPoster.Visibility = item.Thumbnail == null ? Visibility.Collapsed : Visibility.Visible;
         ActionStatus.Text = "Drag the edges to trim. Event previews start 3 seconds before the action.";
@@ -457,6 +463,7 @@ public partial class MainWindow : Window
         RangeLabel.Text = _duration > 0 ? Time(Timeline.SelectionEnd - Timeline.SelectionStart, true) : "00:00.0"; Timeline.InvalidateVisual(); _updating = false;
         UpdateSeekBounds();
         RefreshPlaybackActivity();
+        UpdateVideoContext();
     }
     private void ResetTrimClick(object sender, RoutedEventArgs e) { if (_selected == null) return; Timeline.SelectionStart = Math.Clamp(_selected.Clip.Start, 0, _duration); Timeline.SelectionEnd = Math.Clamp(_selected.Clip.End, Timeline.SelectionStart, _duration); UpdateRange(); SeekTo(Timeline.SelectionStart); }
     private void SetInClick(object sender, RoutedEventArgs e) { if (_duration <= 0) return; Timeline.SelectionStart = Math.Min(Player.Position.TotalSeconds, Math.Max(0, Timeline.SelectionEnd - .1)); UpdateRange(); }
@@ -467,9 +474,12 @@ public partial class MainWindow : Window
     private void ToggleTrimClick(object sender, RoutedEventArgs e) => SetTrimOpen(!_trimOpen);
     private void SetTrimOpen(bool open)
     {
-        _trimOpen = open; Inspector.Visibility = TrimWorkbench.Visibility = open && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
-        InspectorColumn.Width = new GridLength(open && !_fullscreen ? 250 : 0);
-        EditorPanel.RowDefinitions[2].Height = new GridLength(open && !_fullscreen ? 216 : 0);
+        if (open && !_trimOpen)
+        {
+            TrimOverlay.IsEnabled = _inputPreset.Enabled && File.Exists(_selected?.Session.InputLogPath);
+            TrimOverlay.IsChecked = TrimOverlay.IsEnabled;
+        }
+        _trimOpen = open;
         TrimButtonLabel.Text = open ? "Done" : "Trim";
         UpdateActivityVisibility();
         UpdateSeekBounds();
@@ -516,12 +526,9 @@ public partial class MainWindow : Window
         FullscreenToggleButton.ToolTip=fullscreen?"Exit full screen (Esc)":"Full screen (F)";
         SetPlaybackWindowMode(fullscreen);
         foreach (var element in new UIElement[] { TitleBar, Sidebar, SelectedHeading }) element.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        InspectorColumn.Width = new GridLength(!fullscreen && _trimOpen ? 250 : 0);
-        Inspector.Visibility = TrimWorkbench.Visibility = !fullscreen && _trimOpen ? Visibility.Visible : Visibility.Collapsed;
-        EditorPanel.RowDefinitions[0].Height = new GridLength(fullscreen ? 0 : 70);
-        EditorPanel.RowDefinitions[2].Height = new GridLength(!fullscreen && _trimOpen ? 216 : 0);
-        VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(19, 0, 9, 0);
-        VideoSurface.CornerRadius = fullscreen ? new CornerRadius(0) : new CornerRadius(13);
+        EditorPanel.RowDefinitions[0].Height = new GridLength(fullscreen ? 0 : 100);
+        VideoSurface.Margin = fullscreen ? new Thickness(0) : new Thickness(30, 0, 12, 0);
+        VideoSurface.Cut = fullscreen ? 0 : 24;
         Grid.SetRow(EditorPanel, fullscreen ? 0 : 2); Grid.SetColumn(EditorPanel, fullscreen ? 0 : 1); Grid.SetRowSpan(EditorPanel, fullscreen ? 3 : 1); Grid.SetColumnSpan(EditorPanel, fullscreen ? 2 : 1);
         UpdateActivityVisibility();
     }
@@ -592,7 +599,7 @@ public partial class MainWindow : Window
         finally { _deleting = false; ConfirmDeleteButton.IsEnabled = true; CancelDeleteButton.IsEnabled = true; }
     }
     private void RevealClick(object sender, RoutedEventArgs e) { if (_selected == null) return; try { FolderReveal.Show(_selected.Clip.Path); } catch (Exception ex) { ShowToast("Could not open folder: " + ex.Message); } }
-    private async Task EnsureRecorder(bool resumeOnOpen = false)
+    private async Task EnsureRecorder(bool resumeOnOpen = false, bool launchWorker = true)
     {
         if (_reconnecting || _closing || App.IsExiting) return;
         _reconnecting = true;
@@ -600,6 +607,7 @@ public partial class MainWindow : Window
         {
             if (await Command("status")) { if (resumeOnOpen && !_status.Armed && _status.Error == null) await Command("arm"); return; }
             if (App.IsExiting) return;
+            if (!launchWorker) throw new IOException("The verification recorder pipe could not be reached.");
             var file = Path.Combine(AppContext.BaseDirectory, "Echo.Recorder.exe");
             if (!File.Exists(file)) { ErrorBanner.Text = "Recorder is missing. Run scripts/build.ps1 to assemble Echo."; return; }
             var info = new ProcessStartInfo(file) { UseShellExecute = false, CreateNoWindow = true }; info.ArgumentList.Add("--data-dir"); info.ArgumentList.Add(_paths.Root); if(App.IsShutdownProbe)info.ArgumentList.Add("--paused"); Process.Start(info)?.Dispose();
@@ -653,8 +661,8 @@ public partial class MainWindow : Window
             if (active)
                 button.SetResourceReference(BackgroundProperty, "NavigationActiveBrush");
             else
-                button.Background = Brushes.Transparent;
-            button.SetResourceReference(ForegroundProperty, active ? "NavigationTextBrush" : "SecondaryBrush");
+                button.SetResourceReference(BackgroundProperty, "PanelBrush");
+            button.SetResourceReference(ForegroundProperty, active ? "NavigationTextBrush" : "TextBrush");
             if (active)
                 button.SetResourceReference(BorderBrushProperty, "NavigationActiveBrush");
             else
@@ -670,7 +678,7 @@ public partial class MainWindow : Window
                 button.SetResourceReference(BackgroundProperty, "NavigationBrush");
             else
                 button.Background = Brushes.Transparent;
-            button.SetResourceReference(ForegroundProperty, page == active ? "FavoriteBrush" : "SecondaryBrush");
+            button.SetResourceReference(ForegroundProperty, page == active ? "AccentBrush" : "SecondaryBrush");
         }
     }
 
@@ -710,13 +718,20 @@ public partial class MainWindow : Window
     }
 
     private void SettingsClick(object sender, RoutedEventArgs e) { if (_fullscreen) SetFullscreen(false); SetPlaying(false); LibraryPanel.Visibility = Visibility.Collapsed; EditorPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Visible; SetNav("Settings"); ShowSettingsCategory(_settingsCategory); }
+    private void SettingSegmentChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_overlayReady && ReferenceEquals(sender, e.OriginalSource)) AutoSave(false);
+    }
+
     private void SettingsCategoryClick(object sender, RoutedEventArgs e) => ShowSettingsCategory((string)((Button)sender).Tag);
     private void ShowSettingsCategory(string category)
     {
         _settingsCategory = category;
         if(category=="Inputs")_ = LoadPlacementBackground();
-        foreach (var section in new[] { (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var button in new[] { RecordingCategory, AudioCategory, HighlightsCategory, StorageCategory,InputsCategory })
+        if(category=="Recording")_ = LoadQualitySuggestion();
+        foreach (var section in new (FrameworkElement, string)[] { (GeneralSettings, "General"), (RecordingSettings, "Recording"), (AudioSettings, "Audio"), (HighlightsSettings, "Highlights"), (StorageSettings, "Storage"), (InputSettings,"Inputs") }) section.Item1.Visibility = section.Item2 == category
+            ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var button in new[] { GeneralCategory, RecordingCategory, HighlightsCategory, AudioCategory, InputsCategory, StorageCategory })
         {
             bool active = Equals(button.Tag, category);
             if (active)
@@ -725,9 +740,21 @@ public partial class MainWindow : Window
                 button.Background = Brushes.Transparent;
             button.SetResourceReference(ForegroundProperty, active ? "AccentBrush" : "SecondaryBrush");
         }
+        SettingsScroll.Visibility = category == "Inputs" ? Visibility.Collapsed : Visibility.Visible;
         SettingsScroll.ScrollToTop();
+        if (category == "Inputs") InputOptionsScroll.ScrollToTop();
     }
-    private void DragHeader(object sender, MouseButtonEventArgs e) { if (e.OriginalSource is DependencyObject source) { while (source != null && source != TitleBar) { if (source is Button) return; source = VisualTreeHelper.GetParent(source); } } if (e.ClickCount == 2) MaximizeClick(sender, e); else if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
+    private void DragHeader(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source) return;
+        while (source != null && !ReferenceEquals(source, sender))
+        {
+            if (source is ButtonBase or TextBoxBase or System.Windows.Controls.Primitives.Selector) return;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        if (e.ClickCount == 2) MaximizeClick(sender, e);
+        else if (e.LeftButton == MouseButtonState.Pressed) DragMove();
+    }
     private void MinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void MaximizeClick(object sender, RoutedEventArgs e) { if (_fullscreen) SetFullscreen(false); else WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; }
     private void CloseClick(object sender, RoutedEventArgs e) => Close();
@@ -736,7 +763,7 @@ public partial class MainWindow : Window
     {
         ModeBox.SelectedIndex = _settings.Mode == RecordingMode.Clips ? 0 : 1; GameAudioBox.IsChecked = _settings.GameAudio; DesktopAudioBox.IsChecked = _settings.DesktopAudio; MicBox.IsChecked = _settings.Microphone; SeparateAudioBox.IsChecked = _settings.SeparateAudioTracks;
         CaptureMethodBox.SelectedIndex = _settings.CaptureMethod == CaptureMethod.Window ? 0 : 1;
-        KillsBox.IsChecked = _settings.CaptureKills; AssistsBox.IsChecked = _settings.CaptureAssists; DeathsBox.IsChecked = _settings.CaptureDeaths;
+        LoadCaptureChoices();
         ShortcutInput.Text = _settings.ManualShortcut; RemoveMaskedBox.IsChecked = _settings.RemoveMaskedHighlights;
         RecordInputsBox.IsChecked = _settings.RecordInputs;
         LoadOverlayFields();
@@ -744,14 +771,21 @@ public partial class MainWindow : Window
         ResolutionBox.SelectedIndex = _settings.Height == 720 ? 0 : 1; FpsBox.SelectedIndex = _settings.Fps == 30 ? 0 : 1; OutputInput.Text = _settings.OutputDirectory;
     }
     private void BrowseClick(object sender, RoutedEventArgs e) { var dialog = new OpenFolderDialog { Title = "Choose recording folder" }; if (dialog.ShowDialog(this) == true) { OutputInput.Text = dialog.FolderName; AutoSave(false); } }
-    private Dictionary<MomentKind, HighlightRule> RulesWithBasicToggles()
+    private void LoadCaptureChoices()
     {
-        var rules = new Dictionary<MomentKind, HighlightRule>(_settings.HighlightRules);
-        foreach (var (kind, enabled) in new[] { (MomentKind.Kill, KillsBox.IsChecked == true),
-                     (MomentKind.Assist, AssistsBox.IsChecked == true), (MomentKind.Death, DeathsBox.IsChecked == true) })
-            if (rules.TryGetValue(kind, out var rule)) rules[kind] = rule with { Enabled = enabled };
-        return rules;
+        var updating = _updating;
+        _updating = true;
+        try
+        {
+            foreach (var box in EventChoices.Children.OfType<CheckBox>())
+                box.IsChecked = _settings.Captures(Enum.Parse<MomentKind>((string)box.Tag));
+        }
+        finally { _updating = updating; }
     }
+
+    private IEnumerable<KeyValuePair<MomentKind, bool>> CaptureChoices() =>
+        EventChoices.Children.OfType<CheckBox>().Select(box =>
+            new KeyValuePair<MomentKind, bool>(Enum.Parse<MomentKind>((string)box.Tag), box.IsChecked == true));
 
     private void SaveSettingsClick(object sender, RoutedEventArgs e)
     {
@@ -760,8 +794,8 @@ public partial class MainWindow : Window
             var before = int.Parse(BeforeInput.Text, CultureInfo.InvariantCulture); var after = int.Parse(AfterInput.Text, CultureInfo.InvariantCulture);
             var settings = (_settings with { Mode = ModeBox.SelectedIndex == 0 ? RecordingMode.Clips : RecordingMode.FullMatch, CaptureMethod = CaptureMethodBox.SelectedIndex == 0 ? CaptureMethod.Window : CaptureMethod.FullscreenDisplay, GameAudio = GameAudioBox.IsChecked == true,
                 DesktopAudio = DesktopAudioBox.IsChecked == true, Microphone = MicBox.IsChecked == true, SeparateAudioTracks = SeparateAudioBox.IsChecked == true, RecordInputs = RecordInputsBox.IsChecked == true, ManualShortcut = ShortcutGesture.Parse(ShortcutInput.Text)?.Text ?? "", RemoveMaskedHighlights = RemoveMaskedBox.IsChecked == true, CaptureKills = KillsBox.IsChecked == true, CaptureAssists = AssistsBox.IsChecked == true,
-                CaptureDeaths = DeathsBox.IsChecked == true, HighlightRules = RulesWithBasicToggles(), BeforeSeconds = before, AfterSeconds = after,
-                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, OutputDirectory = OutputInput.Text.Trim(),InputOverlay=ReadOverlayFields(),Theme=ThemeBox.SelectedIndex==1?"Light":ThemeBox.SelectedIndex==2?"System":"Dark" }).FitReplayBuffer();
+                CaptureDeaths = DeathsBox.IsChecked == true, BeforeSeconds = before, AfterSeconds = after,
+                Width = ResolutionBox.SelectedIndex == 0 ? 1280 : 1920, Height = ResolutionBox.SelectedIndex == 0 ? 720 : 1080, Fps = FpsBox.SelectedIndex == 0 ? 30 : 60, BitrateKbps = QualityRecommendation.Bitrate(ResolutionBox.SelectedIndex == 0 ? 720 : 1080, FpsBox.SelectedIndex == 0 ? 30 : 60), OutputDirectory = OutputInput.Text.Trim(),InputOverlay=ReadOverlayFields(),Theme=ThemeBox.SelectedIndex==1?"Light":ThemeBox.SelectedIndex==2?"System":"Dark" }).WithCaptureChoices(CaptureChoices()).FitReplayBuffer();
             settings.Validate(); JsonStore.Write(_paths.Settings, settings); _settings = settings;
             _inputPreset=settings.InputOverlay;ThemeService.Apply(settings.Theme);RefreshOverlayPreview();UpdatePlaybackInputs(Player.Position.TotalSeconds);
             SettingsError.Text = ""; _settingsDirty = false; _catalogSignature = "";
@@ -832,6 +866,7 @@ internal sealed class ClipItem : INotifyPropertyChanged
     public Visibility ManualVisibility => ManualCount > 0 ? Visibility.Visible : Visibility.Collapsed;
     public string ShortDate => Session.StartedAt.ToLocalTime().ToString("MMM d, yyyy  HH:mm", CultureInfo.InvariantCulture);
     public string DateLabel => ShortDate;
+    public string CaptureModeLabel => Session.Mode == RecordingMode.FullMatch ? "Entire match" : "Highlights only";
     public string DurationLabel => TimeSpan.FromSeconds(Math.Max(0, Clip.End - Clip.Start)).ToString(@"mm\:ss");
     private readonly string? _thumbnailPath;
     private WeakReference<BitmapSource>? _thumbnail;

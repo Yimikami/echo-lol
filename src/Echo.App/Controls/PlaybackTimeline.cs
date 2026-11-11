@@ -97,7 +97,7 @@ public sealed class PlaybackTimeline : FrameworkElement
         };
         return TimeSpan.FromSeconds(Math.Max(0, value)).ToString(format, CultureInfo.InvariantCulture);
     }
-    private void Text(DrawingContext dc,string text,Point point,Brush brush)=>dc.DrawText(new FormattedText(text,CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface((FontFamily)FindResource("StudioFont"),FontStyles.Normal,FontWeights.Normal,FontStretches.Normal),10,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip),point);
+    private void Text(DrawingContext dc,string text,Point point,Brush brush)=>dc.DrawText(new FormattedText(text,CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface((FontFamily)FindResource("StudioFont"),FontStyles.Normal,FontWeights.Normal,FontStretches.Normal),11,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip),point);
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);if(End<=Start)return;Focus();var at=e.GetPosition(this);

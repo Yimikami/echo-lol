@@ -34,7 +34,7 @@ public partial class MainWindow
             var rule = _settings.Rule(kind);
             bool basic = kind is MomentKind.Kill or MomentKind.Assist or MomentKind.Death;
             var enabled = new CheckBox { Content = KindName(kind), IsChecked = rule.Enabled, VerticalAlignment = VerticalAlignment.Center };
-            var custom = new CheckBox { IsChecked = _settings.HighlightRules.ContainsKey(kind), VerticalAlignment = VerticalAlignment.Center };
+            var custom = new CheckBox { IsChecked = _settings.HighlightRules.TryGetValue(kind, out var storedRule) && !storedRule.UseDefaultLength, VerticalAlignment = VerticalAlignment.Center };
             System.Windows.Automation.AutomationProperties.SetName(custom, $"Custom length for {KindName(kind)}");
             var before = new TextBox { Text = rule.Before.ToString(CultureInfo.InvariantCulture), MaxLength = 2, Margin = new(0, 0, 8, 0) };
             var after = new TextBox { Text = rule.After.ToString(CultureInfo.InvariantCulture), MaxLength = 2 };
@@ -45,13 +45,16 @@ public partial class MainWindow
             custom.Checked += (_, _) => Update();
             custom.Unchecked += (_, _) => Update();
             Update();
-            panel.Children.Add(new UniformGridLabels(enabled, custom, before, after));
+            var row = new Border { CornerRadius = new(12), Padding = new(12, 5, 12, 10), Margin = new(0, 4, 0, 0),
+                Child = new UniformGridLabels(enabled, custom, before, after) };
+            row.SetResourceReference(BackgroundProperty, "RaisedBrush");
+            panel.Children.Add(row);
             rows.Add((kind, enabled, custom, before, after));
         }
         var error = new TextBlock { Foreground = Brushes.OrangeRed, TextWrapping = TextWrapping.Wrap, Margin = new(0, 9, 0, 0) };
         panel.Children.Add(error);
         EchoSettings? saved = null;
-        if (!ShowToolDialog("Automatic highlights", panel, "Apply", 630, () =>
+        if (!ShowToolDialog("Automatic highlights", panel, "Apply", 680, () =>
         {
             var rules = new Dictionary<MomentKind, HighlightRule>();
             foreach (var (kind, enabled, custom, before, after) in rows)
@@ -64,7 +67,7 @@ public partial class MainWindow
                     return false;
                 }
                 if (custom.IsChecked == true || !isEnabled && kind is not (MomentKind.Kill or MomentKind.Assist or MomentKind.Death))
-                    rules[kind] = new(isEnabled, lead, tail);
+                    rules[kind] = new(isEnabled, lead, tail) { UseDefaultLength = custom.IsChecked != true };
             }
             saved = (_settings with { HighlightRules = rules, CaptureKills = rows[0].Enabled.IsChecked == true,
                 CaptureAssists = rows[1].Enabled.IsChecked == true, CaptureDeaths = rows[2].Enabled.IsChecked == true }).FitReplayBuffer();
@@ -74,7 +77,7 @@ public partial class MainWindow
         try
         {
             PersistToolSettings(saved!);
-            KillsBox.IsChecked = _settings.CaptureKills; AssistsBox.IsChecked = _settings.CaptureAssists; DeathsBox.IsChecked = _settings.CaptureDeaths;
+            LoadCaptureChoices();
             SettingsError.Text = "";
         }
         catch (Exception ex) { ShowToast(ShortError(ex)); }
@@ -84,7 +87,8 @@ public partial class MainWindow
     {
         public UniformGridLabels(params object[] values)
         {
-            Margin = new(0, 6, 0, 0);
+            Margin = new(0, 8, 0, 0);
+            MinHeight = 44;
             foreach (int width in new[] { 200, 135, 100, 100 }) ColumnDefinitions.Add(new() { Width = new(width) });
             for (int i = 0; i < values.Length; i++)
             {
@@ -150,11 +154,27 @@ public partial class MainWindow
 
     private async void ExportClick(object sender, RoutedEventArgs e)
     {
-        if (_selected is not { } item || _duration <= 0 || _exporting || _libraryBusy || CaptureActive()) return;
+        if (_selected is not { } item || _duration <= 0) return;
+        ExportOptions? initial = _trimOpen ? new(Layout: TrimFormat.SelectedIndex switch
+        {
+            1 => ExportLayout.Square,
+            2 => TrimHud.IsChecked == true ? ExportLayout.PortraitHud : ExportLayout.Portrait,
+            _ => ExportLayout.Original
+        }, Overlay: TrimOverlay.IsChecked == true) : null;
+        await ExportVideo(item, Timeline.SelectionStart, Timeline.SelectionEnd, Player.Position.TotalSeconds, initial);
+    }
+
+    private async void FeaturedExportClick(object sender, RoutedEventArgs e)
+    {
+        if (FeaturedPanel.DataContext is ClipItem { IsReady: true } item)
+            await ExportVideo(item, item.Clip.Start, item.Clip.End, (item.Clip.Start + item.Clip.End) / 2);
+    }
+
+    private async Task ExportVideo(ClipItem item, double start, double end, double position, ExportOptions? initial = null)
+    {
+        if (_exporting || _libraryBusy || CaptureActive()) return;
         SetPlaying(false);
-        var start = Timeline.SelectionStart;
-        var end = Timeline.SelectionEnd;
-        var options = await ChooseExportOptions(item, single: true);
+        var options = await ChooseExportOptions(item, single: true, position: position, initial: initial);
         if (options == null || StopMediaWork()) return;
         var dialog = NewMp4Dialog(item.Title);
         if (dialog.ShowDialog(this) != true || !ValidateExportDestination(dialog.FileName)) return;
@@ -290,9 +310,10 @@ public partial class MainWindow
         return true;
     }
 
-    private async Task<ExportOptions?> ChooseExportOptions(ClipItem item, bool single, Dictionary<MomentKind, bool>? kinds = null)
+    private async Task<ExportOptions?> ChooseExportOptions(ClipItem item, bool single, Dictionary<MomentKind, bool>? kinds = null,
+        double? position = null, ExportOptions? initial = null)
     {
-        var position = single ? Player.Position.TotalSeconds : item.Clip.Start + (item.Clip.End - item.Clip.Start) / 2;
+        var previewTime = position ?? (single ? Player.Position.TotalSeconds : (item.Clip.Start + item.Clip.End) / 2);
         var poster = item.Thumbnail;
         if (!StopMediaWork())
         {
@@ -304,7 +325,7 @@ public partial class MainWindow
                     Directory.CreateDirectory(ExportCache);
                     try
                     {
-                        MediaTools.Thumbnail(item.Clip.Path, path, Math.Clamp(position, item.Clip.Start, Math.Max(item.Clip.Start, item.Clip.End - .15)), 600, StopMediaWork);
+                        MediaTools.Thumbnail(item.Clip.Path, path, Math.Clamp(previewTime, item.Clip.Start, Math.Max(item.Clip.Start, item.Clip.End - .15)), 600, StopMediaWork);
                         var bitmap = new BitmapImage();
                         bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.UriSource = new Uri(path); bitmap.EndInit(); bitmap.Freeze();
                         return bitmap;
@@ -325,7 +346,7 @@ public partial class MainWindow
         var form = new StackPanel();
         Grid.SetColumn(form, 2);
         columns.Children.Add(form);
-        var format = new ComboBox { ItemsSource = new[] { "Original", "Square · 1:1", "Portrait · 9:16", "Portrait with League HUD" }, SelectedIndex = 0 };
+        var format = new ComboBox { ItemsSource = new[] { "Original", "Square · 1:1", "Portrait · 9:16", "Portrait with League HUD" }, SelectedIndex = (int)(initial?.Layout ?? ExportLayout.Original) };
         AddField(form, "Format", format);
         var focus = new Slider { Minimum = 0, Maximum = 1, Value = .5, IsMoveToPointEnabled = true };
         var vertical = new Slider { Minimum = 0, Maximum = 1, Value = .5, IsMoveToPointEnabled = true };
@@ -333,7 +354,7 @@ public partial class MainWindow
         AddField(form, "Horizontal framing", focus);
         AddField(form, "Vertical framing", vertical);
         form.Children.Add(left);
-        var overlay = new CheckBox { Content = "Include input overlay", IsChecked = _inputPreset.Enabled,
+        var overlay = new CheckBox { Content = "Include input overlay", IsChecked = _inputPreset.Enabled && initial?.Overlay != false,
             IsEnabled = _inputPreset.Enabled && (!single || File.Exists(item.Session.InputLogPath)), Margin = new(0, 13, 0, 0) };
         form.Children.Add(overlay);
         var audioChoices = single && item.Session.AudioTracks.Length > 1

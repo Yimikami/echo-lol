@@ -14,10 +14,6 @@
     <Resource Include="../../assets/brand/game-preview.png" Link="Assets/game-preview.png" />
     <Resource Include="../../assets/brand/setup-jinx.jpg" Link="Assets/setup-jinx.jpg" />
     <EmbeddedResource Include="Assets/champions.json" LogicalName="Echo.Champions.json" />
-    <Resource Include="Assets/Fonts/Manrope-Regular.ttf" />
-    <Resource Include="Assets/Fonts/Manrope-Medium.ttf" />
-    <Resource Include="Assets/Fonts/Manrope-SemiBold.ttf" />
-    <Resource Include="Assets/Fonts/Manrope-Bold.ttf" />
     <Resource Include="Assets/Fonts/BebasNeue-Regular.ttf" />
     <Compile Include="../Echo.Recorder/MediaTools.cs" Link="Services/MediaTools.cs" />
   </ItemGroup>

@@ -74,7 +74,7 @@ public sealed record EchoSettings
             throw new ArgumentException("Choose an absolute recording directory.");
         if (Encoder is not ("auto" or "nvenc" or "amf" or "qsv")) throw new ArgumentException("Choose a supported hardware encoder.");
     }
-    public HighlightRule Rule(MomentKind kind) => HighlightRules.TryGetValue(kind, out var rule) ? rule
+    public HighlightRule Rule(MomentKind kind) => HighlightRules.TryGetValue(kind, out var rule) ? rule.UseDefaultLength ? rule with { Before = BeforeSeconds, After = AfterSeconds } : rule
         : new(kind switch
         {
             MomentKind.Kill => CaptureKills,
@@ -85,7 +85,22 @@ public sealed record EchoSettings
     public bool Captures(MomentKind kind) => Rule(kind).Enabled;
     [JsonIgnore]
     public int RequiredBufferSeconds => Math.Max(BeforeSeconds + AfterSeconds,
-        HighlightRules.Values.Where(rule => rule.Enabled).Select(rule => rule.Before + rule.After).DefaultIfEmpty().Max()) + 4;
+        Enum.GetValues<MomentKind>().Select(Rule).Where(rule => rule.Enabled).Select(rule => rule.Before + rule.After).DefaultIfEmpty().Max()) + 4;
+
+    public EchoSettings WithCaptureChoices(IEnumerable<KeyValuePair<MomentKind, bool>> choices)
+    {
+        var rules = new Dictionary<MomentKind, HighlightRule>(HighlightRules);
+        foreach (var (kind, enabled) in choices)
+            rules[kind] = rules.TryGetValue(kind, out var existing) ? existing with { Enabled = enabled }
+                : new(enabled, BeforeSeconds, AfterSeconds) { UseDefaultLength = true };
+        return this with
+        {
+            HighlightRules = rules,
+            CaptureKills = rules.TryGetValue(MomentKind.Kill, out var kill) ? kill.Enabled : CaptureKills,
+            CaptureAssists = rules.TryGetValue(MomentKind.Assist, out var assist) ? assist.Enabled : CaptureAssists,
+            CaptureDeaths = rules.TryGetValue(MomentKind.Death, out var death) ? death.Enabled : CaptureDeaths
+        };
+    }
 
     public EchoSettings FitReplayBuffer()
     {
@@ -95,7 +110,10 @@ public sealed record EchoSettings
     }
 }
 
-public sealed record HighlightRule(bool Enabled, int Before, int After);
+public sealed record HighlightRule(bool Enabled, int Before, int After)
+{
+    public bool UseDefaultLength { get; init; }
+}
 public sealed record Moment(int EventId, MomentKind Kind, double GameTime, double RecordingTime)
 {
     public int Streak { get; init; }

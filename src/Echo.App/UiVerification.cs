@@ -46,7 +46,9 @@ public partial class MainWindow
             ChampionArtwork.Resolve(new Session { Champion = "Imported video" }) == null);
         Check("Phosphor vector assets resolve", TryFindResource("Phosphor.Play") is Geometry);
         Check("settings have no automatic-save status label", FindName("SettingsMessage") == null);
-        Check("Manrope is embedded and resolves", FontFamily.GetTypefaces().Any(t => t.TryGetGlyphTypeface(out var glyph) && glyph.FamilyNames.Values.Any(n => n.Contains("Manrope", StringComparison.OrdinalIgnoreCase))));
+        Check("native Segoe UI resolves for interface text", FontFamily.Source == "Segoe UI" &&
+            FontFamily.GetTypefaces().Any(t => t.TryGetGlyphTypeface(out var glyph) && glyph.FamilyNames.Values.Any(n => n.Contains("Segoe UI", StringComparison.OrdinalIgnoreCase))));
+        Check("text uses grayscale antialiasing and rounded layout", TextOptions.GetTextRenderingMode(WindowFrame) == TextRenderingMode.Grayscale && UseLayoutRounding);
         RefreshCatalog(true);
         if (FeaturedPanel.DataContext is ClipItem featured && ChampionArtwork.Resolve(featured.Session) is { } championId
             && File.Exists(Path.Combine(_paths.Root, "champion-art", championId + "-splash.jpg")))
@@ -108,6 +110,14 @@ public partial class MainWindow
             Check($"gallery and overview fit {size.Width}px", ClipList.ActualWidth >= 600 &&
                 LibraryScroll.ViewportHeight > 400 && LibraryAside.ActualWidth >= 250 &&
                 LibraryScroll.ActualWidth + LibraryAside.ActualWidth <= LibraryPanel.ActualWidth);
+            Check($"library reserves space beside its scrollbar at {size.Width}px",
+                ((FrameworkElement)LibraryScroll.Content).Margin.Right >= 16);
+            if (FeaturedPanel.Visibility == Visibility.Visible)
+            {
+                var action = FeaturedPlay.TransformToAncestor(FeaturedPanel).TransformBounds(new Rect(FeaturedPlay.RenderSize));
+                Check($"featured playback button fits the card at {size.Width}px",
+                    action.Top >= 0 && action.Bottom <= FeaturedPanel.ActualHeight && action.Height >= 43);
+            }
             if (ClipList.Items.Count > 0)
             {
                 ClipList.SelectedIndex = 0; PrepareVerificationPreview();
@@ -119,28 +129,60 @@ public partial class MainWindow
                 var track = (System.Windows.Controls.Primitives.Track)VolumeSlider.Template.FindName("PART_Track", VolumeSlider);
                 File.WriteAllText(Path.Combine(output, "slider-layout.txt"), $"Value={track.Value} min={track.Minimum} max={track.Maximum} track={track.ActualWidth}x{track.ActualHeight} decrease={track.DecreaseRepeatButton.ActualWidth}x{track.DecreaseRepeatButton.ActualHeight} increase={track.IncreaseRepeatButton.ActualWidth}x{track.IncreaseRepeatButton.ActualHeight}");
                 Check($"volume track is visible at {size.Width}px", track.DecreaseRepeatButton.ActualWidth > 2 && track.IncreaseRepeatButton.ActualWidth > 2);
-                Check($"editor fits {size.Width}px", VideoSurface.ActualWidth >= 600 && VideoSurface.ActualHeight >= 200 && TrimWorkbench.ActualWidth >= 900);
+                Check($"editor fits {size.Width}px", VideoSurface.ActualWidth >= 600 && VideoSurface.ActualHeight >= 200 && TrimWorkbench.ActualWidth >= 580 && TrimWorkbench.ActualWidth < Editor.ActualWidth);
             }
             MatchesClick(this, new());
             if (ClipList.Items.Count > 0)
             {
                 await RenderPreview(Path.Combine(output, $"matches-{size.Width}.png"), size);
                 Check($"full match library uses its match layout at {size.Width}px", ClipList.Items.Cast<ClipItem>().All(item => item.WholeMatch) &&
-                    OverviewItemLabel.Text == "Matches" && FeaturedLabel.Text == "LATEST MATCH");
+                    OverviewItemLabel.Text == "Matches" && FeaturedPanel.Visibility == Visibility.Collapsed);
             }
             SettingsClick(this, new());
-            foreach (var category in new[] { "Recording", "Audio", "Highlights", "Storage","Inputs" })
+            foreach (var category in new[] { "General", "Recording", "Highlights", "Audio", "Inputs", "Storage" })
             {
                 ShowSettingsCategory(category);
+                if (category == "Recording") await LoadQualitySuggestion();
                 await RenderPreview(Path.Combine(output, $"settings-{category.ToLowerInvariant()}-{size.Width}.png"), size);
-                Check($"{category} settings visible at {size.Width}px", new[] { RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings,InputSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
+                Check($"{category} settings visible at {size.Width}px", new FrameworkElement[] { GeneralSettings, RecordingSettings, AudioSettings, HighlightsSettings, StorageSettings, InputSettings }.Count(p => p.Visibility == Visibility.Visible) == 1);
+                if (category == "Highlights")
+                    Check($"clip duration inputs stay compact at {size.Width}px", BeforeInput.ActualWidth == 52 && BeforeInput.ActualHeight == 34 && AfterInput.ActualHeight == 34);
+                Check($"caption controls have a consistent hit area at {size.Width}px",
+                    MaximizeButton.ActualWidth == 46 && MaximizeButton.ActualHeight == 32);
                 if (category == "Inputs")
                 {
-                    var frame = InputPlacementPreview.TransformToAncestor(SettingsScroll).TransformBounds(new Rect(InputPlacementPreview.RenderSize));
-                    Check($"entire gameplay HUD preview fits at {size.Width}px", frame.Top >= 0 && frame.Bottom <= SettingsScroll.ActualHeight + 1 &&
-                        frame.Width >= 520 && Math.Abs(frame.Width / frame.Height - 16d / 9) < .01);
+                    var frame = InputPlacementPreview.TransformToAncestor(InputSettings).TransformBounds(new Rect(InputPlacementPreview.RenderSize));
+                    Check($"gameplay preview fits the overlay workspace at {size.Width}px", frame.Top >= 0 && frame.Bottom <= InputSettings.ActualHeight + 1 &&
+                        frame.Width >= (size.Width >= 1400 ? 740 : 400) && Math.Abs(frame.Width / frame.Height - 16d / 9) < .02);
+                    Check($"overlay controls have a readable column at {size.Width}px", InputOptionsColumn.ActualWidth >= 280);
+                    var switches = new[] { RecordInputsBox, InputVisibleBox, InputApmBox }
+                        .Select(control => control.TransformToAncestor(InputSwitchCard).Transform(new Point())).ToArray();
+                    Check($"recording visibility and APM switches follow visual order at {size.Width}px",
+                        switches[0].Y < switches[1].Y && switches[1].Y < switches[2].Y);
+                    var previewTop = InputPreviewPanel.TranslatePoint(new Point(), InputSettings).Y;
+                    InputOptionsScroll.ScrollToEnd();
+                    await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                    Check($"preview stays visible while editing position at {size.Width}px",
+                        Math.Abs(InputPreviewPanel.TranslatePoint(new Point(), InputSettings).Y - previewTop) < 1);
+                    await RenderPreview(Path.Combine(output, $"settings-input-position-{size.Width}.png"), size);
+                    InputOptionsScroll.ScrollToTop();
+
                 }
             }
+        }
+        if (render)
+        {
+            ThemeService.Apply("Light");
+            LibraryClick(this, new());
+            await RenderPreview(Path.Combine(output, "gallery-light.png"), new(1480, 920));
+            if (ClipList.Items.Count > 0)
+            {
+                ClipList.SelectedIndex = 0; PrepareVerificationPreview();
+                await RenderPreview(Path.Combine(output, "watch-light.png"), new(1100, 720));
+            }
+            SettingsClick(this, new()); ShowSettingsCategory("Inputs");
+            await RenderPreview(Path.Combine(output, "settings-inputs-light.png"), new(1480, 920));
+            ThemeService.Apply(_settings.Theme);
         }
         var testPaths = new HostPaths(Path.Combine(output, "settings-profile")); var probe = new MainWindow(testPaths, false);
         try
@@ -155,10 +197,40 @@ public partial class MainWindow
             Check("desktop audio toggle saves without a button", JsonStore.Read<EchoSettings>(testPaths.Settings)?.DesktopAudio == true);
             probe.ModeBox.SelectedIndex = 1;
             Check("entire match selection saves immediately", JsonStore.Read<EchoSettings>(testPaths.Settings)?.Mode == RecordingMode.FullMatch);
+            Check("all supported automatic events are available in settings",
+                probe.EventChoices.Children.OfType<CheckBox>().Select(box => Enum.Parse<MomentKind>((string)box.Tag))
+                    .Order().SequenceEqual(Enum.GetValues<MomentKind>().Where(k => k != MomentKind.Manual).Order()));
+            foreach (var box in probe.EventChoices.Children.OfType<CheckBox>()) box.IsChecked = false;
+            Check("every event toggle saves immediately", Enum.GetValues<MomentKind>().Where(k => k != MomentKind.Manual)
+                .All(kind => !testPaths.LoadSettings().Captures(kind)));
+            foreach (var box in probe.EventChoices.Children.OfType<CheckBox>()) box.IsChecked = true;
+            probe.BeforeInput.Text = "24"; probe.AutoSave(false);
+            Check("global length applies to events toggled on and off", testPaths.LoadSettings().Rule(MomentKind.Baron).Before == 24);
+            var previousHeight = probe._settings.Height;
+            await probe.LoadQualitySuggestion();
+            Check("hardware recommendation does not change saved recording quality", testPaths.LoadSettings().Height == previousHeight);
+            probe.ApplyQualityRecommendationClick(this, new());
+            Check("suggested quality applies resolution frame rate and bitrate together",
+                testPaths.LoadSettings() is { } recommended && recommended.Height == probe._qualitySuggestion!.Height
+                && recommended.Fps == probe._qualitySuggestion.Fps && recommended.BitrateKbps == probe._qualitySuggestion.BitrateKbps);
+            File.WriteAllText(Path.Combine(output, "hardware-recommendation.txt"), probe.QualitySuggestion.Text + "\n" + probe.QualityHardware.Text);
             probe.ShortcutInput.Text = "Ctrl+Alt+F9"; probe.AutoSave(false);
             Check("manual shortcut is saved with settings", JsonStore.Read<EchoSettings>(testPaths.Settings)?.ManualShortcut == "Ctrl+Alt+F9");
             probe.RecordInputsBox.IsChecked = true;
             Check("gameplay input recording is explicitly opt-in and persists", JsonStore.Read<EchoSettings>(testPaths.Settings)?.RecordInputs == true);
+            probe.InputCornerChoice.SelectedIndex = 1;
+            var chosenCorner = probe.OverlayCorner(3);
+            Check("corner picker saves the selected top-right position",
+                Math.Abs(testPaths.LoadSettings().InputOverlay.X - chosenCorner.X) < .001 &&
+                probe.InputPositionLabel.Text == "Top right");
+            probe.InputSizeSlider.Value = .42;
+            Check("overlay size feedback and saved width agree", probe.InputSizeValue.Text == "42%" &&
+                Math.Abs(testPaths.LoadSettings().InputOverlay.Width - .42) < .001);
+            probe.InputLayoutBox.SelectedIndex = 3;
+            probe.InputStyleBox.SelectedIndex = 1;
+            Check("overlay layout and style cards save the chosen preset immediately",
+                JsonStore.Read<EchoSettings>(testPaths.Settings)?.InputOverlay is { Layout: "Custom", Style: "Light" });
+
             var match = new Session { Mode = RecordingMode.FullMatch, RecordingPath = Path.Combine(testPaths.Root, "live.mkv") };
             var matchFolder = Path.Combine(probe._settings.OutputDirectory, match.Id); Directory.CreateDirectory(matchFolder); JsonStore.Write(Path.Combine(matchFolder, "session.json"), match);
             probe._matches = true; probe.RefreshCatalog(true);
@@ -258,8 +330,9 @@ public partial class MainWindow
             }
         }
         var service = Serve(); var probe = new MainWindow(paths, false);
-        try { await probe.EnsureRecorder(true); await service; }
-        catch (Exception ex) { throw new InvalidOperationException($"Startup pipe check: commands={string.Join(',', commands)}; state={probe._status.State}; error={probe.ErrorBanner.Text}", ex); }
+        var startupState = $"closing={probe._closing}, reconnecting={probe._reconnecting}, exiting={App.IsExiting}, remaining={timeout.IsCancellationRequested}";
+        try { await probe.EnsureRecorder(true, launchWorker: false); await service; }
+        catch (Exception ex) { throw new InvalidOperationException($"Startup pipe check ({startupState}): commands={string.Join(',', commands)}; state={probe._status.State}; error={probe.ErrorBanner.Text}", ex); }
         finally { probe.Close(); }
         return commands;
     }

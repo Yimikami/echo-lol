@@ -26,11 +26,12 @@ public sealed class EventStrip : FrameworkElement
         var track = (Brush)FindResource("StripTrackBrush");
         drawing.DrawRoundedRectangle(track, null, new Rect(0, y, ActualWidth, height), 2, 2);
         if (Points == null) return;
+        var radius = Math.Min(5, ActualHeight / 2);
         foreach (var point in Points)
         {
             var brush = (Brush)FindResource(MomentGlyph.BrushFor(point.Kind));
-            var x = Math.Clamp(point.Fraction, 0, 1) * (ActualWidth - 4);
-            drawing.DrawRoundedRectangle(brush, null, new Rect(x, 0, 4, ActualHeight), 1, 1);
+            var x = radius + Math.Clamp(point.Fraction, 0, 1) * Math.Max(0, ActualWidth - 2 * radius);
+            drawing.DrawEllipse(brush, null, new Point(x, ActualHeight / 2), radius, radius);
         }
     }
 }

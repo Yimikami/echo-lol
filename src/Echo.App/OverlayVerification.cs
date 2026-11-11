@@ -220,8 +220,13 @@ public partial class MainWindow
         placement.MoveTo(new Point(placement.ActualWidth*.22,placement.ActualHeight*.32));placement.ResizeBy(-45);placement.Commit();
         var saved=_paths.LoadSettings().InputOverlay;
         check("pre-game placement saves position and size",Math.Abs(saved.X-.22)<.001&&Math.Abs(saved.Y-.32)<.001&&Math.Abs(saved.Width-expectedWidth)<.001);
-        check("free placement is labelled custom",InputPositionBox.SelectedIndex==4);
+        check("free placement is labelled custom",InputCornerChoice.SelectedIndex==-1 && InputPositionLabel.Text=="Custom");
         check("settings preview and normal playback share a preset",JsonSerializer.Serialize(PlaybackInputs.Preset)==JsonSerializer.Serialize(saved)&&JsonSerializer.Serialize(placement.Preset)==JsonSerializer.Serialize(saved));
+        var beforeNudge = placement.Preset.X;
+        placement.Nudge(.01, 0);
+        check("keyboard placement nudges and saves the overlay", placement.Focusable &&
+            Math.Abs(placement.Preset.X - beforeNudge - .01) < .001 &&
+            Math.Abs(_paths.LoadSettings().InputOverlay.X - placement.Preset.X) < .001);
         placement.MoveTo(new Point(placement.ActualWidth*2,placement.ActualHeight*2));placement.Commit();
         check("pre-game drag stays inside the video",saved.X<placement.Preset.X&&placement.Preset.X<1&&placement.Preset.Y<1);
         _inputPreset=saved;PersistInputPreset();
@@ -231,6 +236,51 @@ public partial class MainWindow
         await OverlayVerification.Render((FrameworkElement)selector.Content,Path.Combine(output,"key-selection.png"),new(820,700));selector.Close();
         _inputPreset=new InputOverlayPreset{Layout="Custom",X=saved.X,Y=saved.Y,Width=saved.Width};PersistInputPreset();
         await LoadPlacementBackground();check("preview frame is cached locally from a recording",InputPlacementPreview.BackgroundPath==Path.Combine(_paths.Root,"overlay-preview.png")&&File.Exists(InputPlacementPreview.BackgroundPath));
+        var previousFrame = placement.BackgroundImage;
+        var previewPath = placement.BackgroundPath!;
+        var previousHash = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(previewPath));
+        var recordingOptions = _settings;
+        var metadata = Path.Combine(_settings.OutputDirectory, "fixture", "session.json");
+        var metadataBytes = File.ReadAllBytes(metadata);
+        try
+        {
+            var session = JsonStore.Read<Session>(metadata)!;
+            session.Clips.Add(new("newest-preview", session.Clips[0].Path, 2.5, 3.8, "Assist", false));
+            JsonStore.Write(metadata, session);
+            await LoadPlacementBackground(true);
+            check("refresh replaces the same cache path with a new decoded frame",
+                !ReferenceEquals(previousFrame, placement.BackgroundImage) && placement.BackgroundPath == previewPath &&
+                !previousHash.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(previewPath))));
+            previousFrame = placement.BackgroundImage;
+            previousHash = System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(previewPath));
+            _settings = _settings with { OutputDirectory = Path.Combine(output, "empty-preview-library") };
+            await LoadPlacementBackground(true);
+            check("empty library refresh preserves the current recording image", ReferenceEquals(previousFrame, placement.BackgroundImage));
+            var brokenRoot = Path.Combine(output, "broken-preview-library");
+            var brokenFolder = Path.Combine(brokenRoot, "broken");
+            Directory.CreateDirectory(brokenFolder);
+            var brokenVideo = Path.Combine(brokenFolder, "invalid.mp4");
+            File.WriteAllText(brokenVideo, "invalid video fixture");
+            var broken = new Session { Id = "broken", EndedAt = DateTimeOffset.UtcNow };
+            broken.Clips.Add(new("invalid", brokenVideo, 0, 2, "Kill", false));
+            JsonStore.Write(Path.Combine(brokenFolder, "session.json"), broken);
+            _settings = _settings with { OutputDirectory = brokenRoot };
+            await LoadPlacementBackground(true);
+            check("failed frame extraction preserves both displayed image and cache",
+                ReferenceEquals(previousFrame, placement.BackgroundImage) &&
+                previousHash.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(previewPath))));
+            JsonStore.Write(_paths.Status, new RecorderStatus { Recording = true });
+            await LoadPlacementBackground(true);
+            check("refresh during capture preserves the current preview", ReferenceEquals(previousFrame, placement.BackgroundImage));
+            check("preview refresh restores its button and cleans staging files", PlacementRefreshButton.IsEnabled &&
+                Equals(PlacementRefreshButton.Content, "Use latest clip") && !Directory.EnumerateFiles(_paths.Root, "*.preview.png").Any());
+        }
+        finally
+        {
+            _settings = recordingOptions;
+            File.WriteAllBytes(metadata, metadataBytes);
+            File.Delete(_paths.Status);
+        }
         await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,"input-settings.png"),new(1480,1100));
         await OverlayVerification.Render(placement,Path.Combine(output,"placement-preview.png"),new(placement.ActualWidth,placement.ActualHeight));
     }
@@ -240,9 +290,29 @@ public partial class OnboardingWindow
     internal void VerifySkip(Action<string,bool> check){ThemeChoice.SelectedIndex=1;InputsChoice.IsChecked=true;SkipClick(this,new());var settings=_paths.LoadSettings();check("skip keeps defaults and completes setup",settings.SetupCompleted&&settings.Theme=="Dark"&&!settings.RecordInputs&&settings.GameAudio&&!settings.DesktopAudio);}
     internal async Task VerifySetup(string output,Action<string,bool> check)
     {
+        await _recommendationTask;
+        check("setup preselects suggested quality on a new profile", QualityChoice.SelectedIndex == _qualityRecommendation!.ChoiceIndex);
+        check("setup includes every automatic event", SetupEvents.Children.OfType<CheckBox>().Count() == Enum.GetValues<MomentKind>().Length - 1);
+        var existingPaths = new HostPaths(Path.Combine(output, "existing-setup-profile"));
+        JsonStore.Write(existingPaths.Settings, new EchoSettings { SetupCompleted = true, Height = 720, Width = 1280, Fps = 30 });
+        var existing = new OnboardingWindow(existingPaths);
+        await existing._recommendationTask;
+        check("rerunning setup preserves the existing quality choice", existing.QualityChoice.SelectedIndex == 0);
+        existing.SkipClick(this, new());
         for(_step=0;_step<5;_step++){ShowStep();await OverlayVerification.Render((FrameworkElement)Content,Path.Combine(output,$"onboarding-{_step+1}.png"),new(960,760));check("onboarding step "+(_step+1)+" is reachable",Progress.Value==_step+1&&SetupSteps.Children.Count==5);}
+        ThemeChoice.SelectedIndex = 1;
+        _step = 0; ShowStep();
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "onboarding-light.png"), new(960, 760));
+        var setupStepLabel = (TextBlock)((StackPanel)((Button)SetupSteps.Children[0]).Content).Children[1];
+        check("setup artwork text stays light in Light theme", ((SolidColorBrush)setupStepLabel.Foreground).Color.R > 200);
+        FitSetupWidth(800); _step = 1; ShowStep();
+        await OverlayVerification.Render((FrameworkElement)Content, Path.Combine(output, "onboarding-800.png"), new(800, 700));
+        check("setup fits a narrower work area", Width == 800 && MinWidth <= 800 &&
+            SetupContent.ActualWidth > 450 && SourceChoice.ActualWidth <= SetupContent.ActualWidth);
+        FitSetupWidth(960);
+        ThemeChoice.SelectedIndex = 0;
         _step=2;ShowStep();BeforeChoice.Text="invalid";NextClick(this,new());check("onboarding validates timing before leaving highlights",_step==2&&SetupError.Text.Length>0);
-        ThemeChoice.SelectedIndex=1;QualityChoice.SelectedIndex=0;ModeChoice.SelectedIndex=1;SourceChoice.SelectedIndex=1;BeforeChoice.Text="12";AfterChoice.Text="6";KillsChoice.IsChecked=true;DeathsChoice.IsChecked=false;DesktopChoice.IsChecked=true;MicChoice.IsChecked=true;InputsChoice.IsChecked=true;ShortcutChoice.Text="Ctrl+Alt+F9";FolderChoice.Text=Path.Combine(_paths.Root,"media");
-        _step=4;NextClick(this,new());var settings=_paths.LoadSettings();check("setup persists recording quality and mode",settings.Height==720&&settings.Fps==30&&settings.Mode==RecordingMode.FullMatch);check("setup persists event audio shortcut and storage choices",!settings.CaptureDeaths&&settings.DesktopAudio&&settings.Microphone&&settings.ManualShortcut=="Ctrl+Alt+F9"&&settings.OutputDirectory==FolderChoice.Text&&settings.RecordInputs);check("light theme applies",settings.Theme=="Light"&&((SolidColorBrush)Application.Current.Resources["BackgroundBrush"]).Color.R>200);
+        ThemeChoice.SelectedIndex=1;QualityChoice.SelectedIndex=0;ModeChoice.SelectedIndex=1;SourceChoice.SelectedIndex=1;BeforeChoice.Text="12";AfterChoice.Text="6";KillsChoice.IsChecked=true;DeathsChoice.IsChecked=false;DesktopChoice.IsChecked=true;MicChoice.IsChecked=true;TracksChoice.IsChecked=true;SetupEvents.Children.OfType<CheckBox>().Single(box => Equals(box.Tag,"Baron")).IsChecked=false;InputsChoice.IsChecked=true;ShortcutChoice.Text="Ctrl+Alt+F9";FolderChoice.Text=Path.Combine(_paths.Root,"media");
+        _step=4;NextClick(this,new());var settings=_paths.LoadSettings();check("setup persists recording quality and mode",settings.Height==720&&settings.Fps==30&&settings.Mode==RecordingMode.FullMatch);check("setup persists event audio shortcut and storage choices",!settings.CaptureDeaths&&settings.DesktopAudio&&settings.Microphone&&settings.SeparateAudioTracks&&!settings.Captures(MomentKind.Baron)&&settings.ManualShortcut=="Ctrl+Alt+F9"&&settings.OutputDirectory==FolderChoice.Text&&settings.RecordInputs);check("light theme applies",settings.Theme=="Light"&&((SolidColorBrush)Application.Current.Resources["BackgroundBrush"]).Color.R>200);
     }
 }

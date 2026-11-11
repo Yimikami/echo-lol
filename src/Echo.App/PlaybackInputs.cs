@@ -26,7 +26,14 @@ public partial class MainWindow
     {
         InputPlacementPreview.SetPreset(_inputPreset);
         var updating=_updating;_updating=true;
-        InputPositionBox.SelectedIndex=Enumerable.Range(0,4).FirstOrDefault(index => { var corner=OverlayCorner(index); return Math.Abs(_inputPreset.X-corner.X)<.001&&Math.Abs(_inputPreset.Y-corner.Y)<.001; },4);
+        var position = Enumerable.Range(0, 4).FirstOrDefault(index =>
+        {
+            var corner = OverlayCorner(index);
+            return Math.Abs(_inputPreset.X - corner.X) < .001 && Math.Abs(_inputPreset.Y - corner.Y) < .001;
+        }, -1);
+        InputCornerChoice.SelectedIndex = position switch { 2 => 0, 3 => 1, 0 => 2, 1 => 3, _ => -1 };
+        InputPositionLabel.Text = position switch { 0 => "Bottom left", 1 => "Bottom right", 2 => "Top left", 3 => "Top right", _ => "Custom" };
+        InputSizeValue.Text = $"{Math.Round(_inputPreset.Width * 100):0}%";
         _updating=updating;
     }
     private void LoadInputData(ClipItem item)
@@ -54,7 +61,7 @@ public partial class MainWindow
         var x=frame.X+Math.Clamp(_inputPreset.X*frame.Width,0,Math.Max(0,frame.Width-width));var y=frame.Y+Math.Clamp(_inputPreset.Y*frame.Height,0,Math.Max(0,frame.Height-height));
         foreach(var element in new FrameworkElement[]{PlaybackInputs,InputLayerOutline}){Canvas.SetLeft(element,x);Canvas.SetTop(element,y);}
         Canvas.SetLeft(InputResizeGrip,x+width-8);Canvas.SetTop(InputResizeGrip,y+height-8);Canvas.SetLeft(InputCollapseButton,x+width-28);Canvas.SetTop(InputCollapseButton,y+6);
-        InputCollapseButton.Content=_inputPreset.Collapsed?"+":"Ã¢Ë†â€™";PlaybackInputs.InvalidateVisual();
+        InputCollapseButton.Content=_inputPreset.Collapsed?"+":"−";PlaybackInputs.InvalidateVisual();
         if(PlaybackInputs.Visibility!=Visibility.Visible)ShowInputChrome(false);
     }
     private void RefreshInputTimer()
@@ -102,12 +109,25 @@ public partial class MainWindow
         try{_inputPreset.Validate();_settings=_settings with{InputOverlay=_inputPreset};JsonStore.Write(_paths.Settings,_settings);_updating=true;LoadOverlayFields();_updating=false;UpdatePlaybackInputs(Player.Position.TotalSeconds);}
         catch(Exception ex){_updating=false;ShowToast("Could not save overlay: "+ex.Message);}
     }
-    private void InputSizeChanged(object sender,RoutedPropertyChangedEventArgs<double> e){if(_overlayReady&&!_updating)AutoSave(false);}
-    private void InputPositionChanged(object sender,SelectionChangedEventArgs e)
+    private void InputSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if(!_overlayReady||_updating||InputPositionBox.SelectedIndex is <0 or >3)return;
-        var point=OverlayCorner(InputPositionBox.SelectedIndex);_inputPreset=_inputPreset with{X=point.X,Y=point.Y};PersistInputPreset();
+        if (InputSizeValue != null) InputSizeValue.Text = $"{Math.Round(e.NewValue * 100):0}%";
+        if (_overlayReady && !_updating) AutoSave(false);
     }
+
+    private void InputCornerChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_overlayReady || _updating || InputCornerChoice.SelectedItem is not ListBoxItem item) return;
+        var point = OverlayCorner(int.Parse((string)item.Tag, System.Globalization.CultureInfo.InvariantCulture));
+        _inputPreset = _inputPreset with { X = point.X, Y = point.Y };
+        PersistInputPreset();
+    }
+
+    private void InputSettingsSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (InputOptionsColumn != null) InputOptionsColumn.Width = new GridLength(e.NewSize.Width >= 1100 ? 320 : 280);
+    }
+
     private Point OverlayCorner(int index)
     {
         var layout=OverlayAppearance.Layout(_inputPreset);var aspect=layout.Width/(double)(_inputPreset.Collapsed?38:layout.Height);

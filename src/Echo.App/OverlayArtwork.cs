@@ -63,19 +63,21 @@ internal static class OverlayArtwork
         Geometry MousePath(string path, bool mirror = false)
         {
             var geometry = Geometry.Parse(path).Clone();
-            geometry.Transform = new MatrixTransform(new Matrix(mirror ? -mouse.Width : mouse.Width, 0, 0, mouse.Height, mouse.X + (mirror ? mouse.Width : 0), mouse.Y));
+            var width = Math.Min(mouse.Width, mouse.Height * .72);
+            var left = mouse.X + (mouse.Width - width) / 2;
+            geometry.Transform = new MatrixTransform(new Matrix(mirror ? -width : width, 0, 0, mouse.Height, left + (mirror ? width : 0), mouse.Y));
             return Frozen(geometry);
         }
         void MousePart(string? control, Geometry shape, bool pulse = false)
             => parts.Add(new(control, shape, pulse ? Geometry.Empty : Frozen(shape.GetWidenedPathGeometry(new Pen(Brushes.Black, 2.5))), null, pulse));
-        const string button = "M .17,.015 C .12,.015 .10,.025 .085,.09 L .012,.35 C -.004,.405 .018,.425 .08,.425 L .37,.425 L .37,.235 C .37,.175 .411,.15 .48,.15 L .48,.018 Z";
-        MousePart("MouseLeft", MousePath(button)); MousePart("MouseRight", MousePath(button, true));
-        MousePart("MouseMiddle", MousePath("M .485,.185 C .435,.185 .414,.205 .414,.25 L .414,.402 C .414,.425 .432,.435 .455,.435 L .545,.435 C .57,.435 .586,.425 .586,.402 L .586,.25 C .586,.205 .565,.185 .515,.185 Z"));
-        MousePart(null, MousePath("M .07,.46 L .93,.46 C .985,.46 1,.477 .986,.54 L .87,.93 C .85,.989 .82,1 .76,1 L .26,1 C .19,1 .166,.977 .146,.918 L .112,.80 L .082,.69 L .047,.57 C .019,.49 .022,.46 .07,.46 Z"));
-        MousePart("Mouse4", MousePath("M .018,.51 L .069,.50 C .085,.50 .089,.51 .096,.535 L .13,.635 C .135,.652 .128,.66 .11,.665 L .062,.675 C .045,.675 .04,.663 .033,.642 L .005,.54 C 0,.52 .004,.513 .018,.51 Z"));
-        MousePart("Mouse5", MousePath("M .074,.702 L .122,.69 C .14,.686 .147,.70 .152,.72 L .181,.819 C .185,.838 .178,.848 .162,.852 L .11,.862 C .094,.865 .087,.853 .083,.835 L .058,.733 C .054,.714 .061,.705 .074,.702 Z"));
-        MousePart("WheelUp", MousePath("M .443,.225 L .557,.225 L .557,.29 L .443,.29 Z"), true);
-        MousePart("WheelDown", MousePath("M .443,.335 L .557,.335 L .557,.40 L .443,.40 Z"), true);
+        MousePart("MouseLeft", MousePath(MouseContours.Left));
+        MousePart("MouseRight", MousePath(MouseContours.Left, true));
+        MousePart("MouseMiddle", MousePath(MouseContours.Wheel));
+        MousePart(null, MousePath(MouseContours.Palm));
+        MousePart("Mouse4", MousePath(MouseContours.SideFront));
+        MousePart("Mouse5", MousePath(MouseContours.SideBack));
+        MousePart("WheelUp", MousePath("M .46,.215 L .54,.215 L .54,.275 L .46,.275 Z"), true);
+        MousePart("WheelDown", MousePath("M .46,.315 L .54,.315 L .54,.375 L .46,.375 Z"), true);
         return new(layout.Width, layout.Height, parts);
     }
     internal static string AssPath(Geometry geometry, double scale, double x, double y)

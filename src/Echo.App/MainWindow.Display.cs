@@ -32,6 +32,10 @@ public partial class MainWindow
 
     private void UpdateDisplayFrame()
     {
+        var maximized = WindowState == WindowState.Maximized;
+        MaximizeGlyph.Data = Geometry.Parse(maximized ? "M2.5,0.5 H9.5 V7.5 M0.5,2.5 H7.5 V9.5 H0.5 Z" : "M0.5,0.5 H9.5 V9.5 H0.5 Z");
+        MaximizeButton.ToolTip = maximized ? "Restore down" : "Maximize";
+        System.Windows.Automation.AutomationProperties.SetName(MaximizeButton, (string)MaximizeButton.ToolTip);
         var handle = new WindowInteropHelper(this).Handle;
         if (WindowDisplay.Areas(handle) is not { } areas) return;
         var dpi = VisualTreeHelper.GetDpi(this);
