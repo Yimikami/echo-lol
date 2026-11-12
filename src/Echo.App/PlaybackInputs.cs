@@ -107,7 +107,7 @@ public partial class MainWindow
     private void PersistInputPreset()
     {
         try{_inputPreset.Validate();_settings=_settings with{InputOverlay=_inputPreset};JsonStore.Write(_paths.Settings,_settings);_updating=true;LoadOverlayFields();_updating=false;UpdatePlaybackInputs(Player.Position.TotalSeconds);}
-        catch(Exception ex){_updating=false;ShowToast("Could not save overlay: "+ex.Message);}
+        catch(Exception ex){_updating=false;ShowError("Couldn't save overlay", ex);}
     }
     private void InputSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

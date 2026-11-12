@@ -274,7 +274,7 @@ public partial class MainWindow
         else ShowToast("Exporting…");
         try { ShowToast(await Task.Run(job)); }
         catch (OperationCanceledException) { ShowToast("Export stopped for gameplay."); }
-        catch (Exception ex) { ShowToast($"Could not export: {ShortError(ex)}"); }
+        catch (Exception ex) { ShowError("Couldn't export", ex); }
         finally
         {
             RecapProgressPanel.Visibility = Visibility.Collapsed;

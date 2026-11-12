@@ -27,7 +27,7 @@ public partial class MainWindow
 
     private bool ShowEntry(ClipItem item) => _libraryView == 3
         ? item.Session.EndedAt != null && !item.Session.PreparationPending && item.Missing
-        : !item.Missing && !item.Clip.VideoUnavailable && (_libraryView != 1 || item.Favorite);
+        : (!item.Missing || item.PreparationFailed) && !item.Clip.VideoUnavailable && (_libraryView != 1 || item.Favorite);
 
     private void LibraryViewChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -240,7 +240,7 @@ public partial class MainWindow
             return true;
         }
         catch (OperationCanceledException) { ShowToast("Stopped for gameplay."); return false; }
-        catch (Exception ex) { ShowToast($"Could not finish: {ShortError(ex)}"); return false; }
+        catch (Exception ex) { ShowError("Couldn't finish", ex); return false; }
         finally
         {
             _libraryBusy = false;

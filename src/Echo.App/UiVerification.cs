@@ -243,6 +243,7 @@ public partial class MainWindow
             probe.SearchBox.Text = "Unique champion"; Check("search resets pagination and filters results", probe.ClipList.Items.Count == 1 && probe._galleryPage == 0);
         }
         finally { probe.Close(); }
+        await VerifyNotifications(output, Check, render);
         File.WriteAllLines(Path.Combine(output, "checks.txt"), checks);
     }
     internal async Task VerifyLibrarySelection(string output, Action<string, bool> check)
@@ -333,15 +334,24 @@ public partial class MainWindow
         var service = Serve(); var probe = new MainWindow(paths, false);
         var startupState = $"closing={probe._closing}, reconnecting={probe._reconnecting}, exiting={App.IsExiting}, remaining={timeout.IsCancellationRequested}";
         try { await probe.EnsureRecorder(true, launchWorker: false); await service; }
-        catch (Exception ex) { throw new InvalidOperationException($"Startup pipe check ({startupState}): commands={string.Join(',', commands)}; state={probe._status.State}; error={probe.ErrorBanner.Text}", ex); }
+        catch (Exception ex) { throw new InvalidOperationException($"Startup pipe check ({startupState}): commands={string.Join(',', commands)}; state={probe._status.State}; error={probe.ToastDetails.Text}", ex); }
         finally { probe.Close(); }
         return commands;
     }
     private async Task RenderPreview(string path, Size size)
     {
         var root = (FrameworkElement)Content;
+        // This verifier never shows its window. Hidden descendants do not always
+        // propagate measure invalidation, particularly when a detail panel expands.
+        static void InvalidateTree(DependencyObject node)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) InvalidateTree(VisualTreeHelper.GetChild(node, i));
+            if (node is UIElement element) { element.InvalidateMeasure(); element.InvalidateArrange(); }
+        }
+        InvalidateTree(root);
         root.Measure(size); root.Arrange(new Rect(size)); root.UpdateLayout();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        InvalidateTree(root);
         root.Measure(size); root.Arrange(new Rect(size)); root.UpdateLayout();
         var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32); bitmap.Render(root);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));

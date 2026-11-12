@@ -29,17 +29,7 @@
 <Button Style="{StaticResource CaptionButton}" Click="MinimizeClick" ToolTip="Minimize" AutomationProperties.Name="Minimize"><Path Data="M0,5 H10" Stroke="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/></Button>
 <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Click="MaximizeClick" ToolTip="Maximize" AutomationProperties.Name="Maximize"><Path x:Name="MaximizeGlyph" Data="M0.5,0.5 H9.5 V9.5 H0.5 Z" Stroke="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/></Button>
 <Button Style="{StaticResource CloseCaptionButton}" Click="CloseClick" ToolTip="Close to tray" AutomationProperties.Name="Close to tray"><Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" Width="10" Height="10"/></Button>
-</StackPanel><TextBlock x:Name="ErrorBanner" Grid.Row="1" Grid.ColumnSpan="2" Background="#3D262B" Foreground="#FFC2CC" Padding="20,10" TextWrapping="Wrap">
-        <TextBlock.Style>
-          <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Style.Triggers>
-              <Trigger Property="Text" Value="">
-                <Setter Property="Visibility" Value="Collapsed"/>
-              </Trigger>
-            </Style.Triggers>
-          </Style>
-        </TextBlock.Style>
-      </TextBlock>
+</StackPanel>
       <Border x:Name="Sidebar" Grid.RowSpan="3" Panel.ZIndex="2" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,20,0,0">
@@ -1027,7 +1017,8 @@
           </Grid>
         </Border>
       </Grid>
-      <Border x:Name="RecapProgressPanel" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="304" Margin="24,24,24,88" Padding="15,11" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Visibility="Collapsed" Panel.ZIndex="29">
+      <StackPanel x:Name="NotificationHost" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24" Panel.ZIndex="30">
+      <Border x:Name="RecapProgressPanel" HorizontalAlignment="Right" Width="304" Margin="0,0,0,10" Padding="15,11" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Visibility="Collapsed">
         <StackPanel>
           <DockPanel>
             <TextBlock x:Name="RecapProgressPercent" DockPanel.Dock="Right" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
@@ -1037,14 +1028,26 @@
           <TextBlock x:Name="RecapProgressDetail" Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
         </StackPanel>
       </Border>
-      <Border x:Name="Toast" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="9" Padding="15,10" Margin="24" Visibility="Collapsed" Panel.ZIndex="30" MaxWidth="460">
-        <DockPanel>
-          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Click="DismissToastClick" AutomationProperties.Name="Dismiss notification" Margin="12,0,0,0">
-            <local:PhosphorIcon Kind="Close" Width="15" Height="15"/>
-          </Button>
-          <TextBlock x:Name="ToastText" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="13" AutomationProperties.LiveSetting="Polite"/>
-        </DockPanel>
+      <Border x:Name="Toast" HorizontalAlignment="Right" Width="420" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Visibility="Collapsed" MouseEnter="ToastInteractionChanged" MouseLeave="ToastInteractionChanged" IsKeyboardFocusWithinChanged="ToastFocusChanged">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="30"/></Grid.ColumnDefinitions>
+          <local:PhosphorIcon x:Name="ToastIcon" Kind="Info" Width="20" Height="20" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Foreground="{DynamicResource AssistBrush}"/>
+          <StackPanel Grid.Column="1">
+            <TextBlock x:Name="ToastTitle" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6"/>
+            <TextBlock x:Name="ToastText" TextWrapping="Wrap" FontSize="13" LineHeight="20" Foreground="{DynamicResource SecondaryBrush}" AutomationProperties.LiveSetting="Polite"/>
+            <StackPanel x:Name="ToastActions" Orientation="Horizontal" Margin="0,14,0,0">
+              <Button x:Name="ToastActionButton" Click="ToastActionClick" FontSize="12" Padding="12,7" MinHeight="32" Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource AccentTextBrush}" BorderThickness="0" Margin="0,0,8,0"/>
+              <Button x:Name="ToastDetailsButton" Content="Details" Click="ToastDetailsClick" FontSize="12" Padding="10,7" MinHeight="32" Background="Transparent"/>
+            </StackPanel>
+            <StackPanel x:Name="ToastDetailsPanel" Visibility="Collapsed" Margin="0,12,0,0">
+              <TextBox x:Name="ToastDetails" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="160" VerticalScrollBarVisibility="Auto" FontSize="12" Padding="10" Background="{DynamicResource PanelBrush}" AutomationProperties.Name="Error details"/>
+              <Button x:Name="ToastCopyButton" Content="Copy details" Click="ToastCopyClick" HorizontalAlignment="Left" FontSize="12" Padding="10,6" MinHeight="30" Margin="0,8,0,0" Background="Transparent"/>
+            </StackPanel>
+          </StackPanel>
+          <Button Grid.Column="2" Style="{StaticResource IconButton}" Width="30" Height="30" VerticalAlignment="Top" Click="DismissToastClick" AutomationProperties.Name="Dismiss notification" ToolTip="Dismiss" Margin="5,-5,-5,0"><local:PhosphorIcon Kind="Close" Width="14" Height="14"/></Button>
+        </Grid>
       </Border>
+      </StackPanel>
       <Border x:Name="DeleteOverlay" KeyboardNavigation.TabNavigation="Cycle" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="#B008090D" Visibility="Collapsed" Panel.ZIndex="20">
         <Border Width="430" Background="{DynamicResource PanelBrush}" CornerRadius="12" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28">
           <StackPanel>

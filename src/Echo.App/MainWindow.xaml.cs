@@ -52,7 +52,8 @@ public partial class MainWindow : Window
         SettingsPanel.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((_, _) => AutoSave(false)));
         SettingsPanel.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (e.OriginalSource != OutputInput) AutoSave(true); }));
         OutputInput.LostKeyboardFocus += (_, _) => AutoSave(false);
-        _toastTimer.Tick += (_, _) => { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
+        _toastTimer.Tick += (_, _) => DismissToastClick(this, new());
+        EditorPanel.IsVisibleChanged += (_, _) => PositionNotifications();
         Player.Volume = VolumeSlider.Value;
         _scrubTimer.Tick += (_, _) => PreviewScrub();
         Seek.LostMouseCapture += (_, _) => CompleteScrub();
@@ -113,7 +114,9 @@ public partial class MainWindow : Window
             CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
             CaptureGlyph.Kind = _status.Armed ? "Pause" : "Play";
             RecorderLabel.Text = !fresh ? "Offline" : _status.Recording ? "REC" : _status.Armed ? "Auto" : "Paused";
-            ErrorBanner.Text = _status.Error ?? "";
+            ClearObservedError("status-read");
+            if (fresh) ClearObservedError("recorder-start");
+            ObserveError("capture", "Capture needs attention", _status.Error, "Try again", () => CaptureClick(this, new()));
             ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
             ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
             QuickExportButton.IsEnabled=ExportButton.IsEnabled;
@@ -124,49 +127,7 @@ public partial class MainWindow : Window
             DeleteButton.IsEnabled = _selected != null && !_exporting;
             RevealButton.IsEnabled = _selected != null;
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { ErrorBanner.Text = "Could not read recorder status: " + e.Message; }
-    }
-    private void RefreshCatalog(bool force = false)
-    {
-        if (_deleteCandidate != null || _libraryBusy) return;
-        try
-        {
-            if (!Directory.Exists(_settings.OutputDirectory)) { _items.Clear(); ApplyFilter(); return; }
-            var files = Directory.EnumerateDirectories(_settings.OutputDirectory).Where(dir => !Path.GetFileName(dir).StartsWith('.')).Select(dir => new FileInfo(Path.Combine(dir, "session.json"))).Where(f => f.Exists).ToArray();
-            var signature = string.Join(";", files.Select(f => $"{f.Directory!.Name}:{f.LastWriteTimeUtc.Ticks}:{f.Length}"));
-            if (!force && signature == _catalogSignature) return;
-            _catalogSignature = signature; _items.Clear();
-            foreach (var file in files)
-            {
-                Session? session;
-                try { session = JsonStore.Read<Session>(file.FullName); } catch (Exception e) when (e is IOException or JsonException) { continue; }
-                if (session == null || session.Id != file.Directory!.Name) continue;
-                bool trash = _libraryView == 2;
-                if (session.DeletedAt != null)
-                {
-                    if (trash) _items.Add(MatchItem(session, file.DirectoryName!));
-                    continue;
-                }
-                if (_matches && !trash)
-                {
-                    if (session.Mode == RecordingMode.FullMatch && session.RecordingPath != null)
-                    {
-                        var match = MatchItem(session, file.DirectoryName!);
-                        if (ShowEntry(match)) _items.Add(match);
-                    }
-                    continue;
-                }
-                if (session.EndedAt == null) continue;
-                foreach (var clip in session.Clips)
-                {
-                    var item = new ClipItem(session, clip, clip.ThumbnailPath ?? Path.Combine(file.DirectoryName!, clip.Id + ".jpg"));
-                    if (trash ? clip.DeletedAt != null : clip.DeletedAt == null && ShowEntry(item)) _items.Add(item);
-                }
-            }
-            _items.Sort((a, b) => b.Session.StartedAt.CompareTo(a.Session.StartedAt)); ApplyFilter();
-            ScheduleStorageCleanup();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ErrorBanner.Text = "Could not open the recording folder: " + e.Message; }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { ObserveError("status-read", "Couldn't read capture status", e.ToString(), "Try again", RefreshStatus); }
     }
     private static string? FindMatchPoster(string folder, Session session) => new[] { Path.Combine(folder, "match.jpg") }.Concat(session.Clips.Select(c => c.ThumbnailPath ?? Path.Combine(folder, c.Id + ".jpg"))).FirstOrDefault(File.Exists);
     private void ApplyFilter(bool resetPage = false)
@@ -338,6 +299,7 @@ public partial class MainWindow : Window
 
     private void OpenRecording(ClipItem item)
     {
+        if (item.PreparationFailed) { ShowPreparationError(item.Session, explicitRequest: true); if (!item.IsReady) return; }
         if (!item.IsReady) { ShowToast(item.StateLabel == "Recording" ? "This match is recording. It will be ready when the match ends." : "This recording is being prepared."); return; }
         CancelScrub();
         OpenEditor();
@@ -608,7 +570,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { DeleteDescription.Text = "Could not delete: " + ex.Message; }
         finally { _deleting = false; ConfirmDeleteButton.IsEnabled = true; CancelDeleteButton.IsEnabled = true; }
     }
-    private void RevealClick(object sender, RoutedEventArgs e) { if (_selected == null) return; try { FolderReveal.Show(_selected.Clip.Path); } catch (Exception ex) { ShowToast("Could not open folder: " + ex.Message); } }
+    private void RevealClick(object sender, RoutedEventArgs e) { if (_selected == null) return; try { FolderReveal.Show(_selected.Clip.Path); } catch (Exception ex) { ShowError("Couldn't open folder", ex); } }
     private async Task EnsureRecorder(bool resumeOnOpen = false, bool launchWorker = true)
     {
         if (_reconnecting || _closing || App.IsExiting) return;
@@ -619,11 +581,11 @@ public partial class MainWindow : Window
             if (App.IsExiting) return;
             if (!launchWorker) throw new IOException("The verification recorder pipe could not be reached.");
             var file = Path.Combine(AppContext.BaseDirectory, "Echo.Recorder.exe");
-            if (!File.Exists(file)) { ErrorBanner.Text = "Recorder is missing. Run scripts/build.ps1 to assemble Echo."; return; }
+            if (!File.Exists(file)) throw new FileNotFoundException("The recorder is missing. Reinstall Echo to restore it.", file);
             var info = new ProcessStartInfo(file) { UseShellExecute = false, CreateNoWindow = true }; info.ArgumentList.Add("--data-dir"); info.ArgumentList.Add(_paths.Root); if(App.IsShutdownProbe)info.ArgumentList.Add("--paused"); Process.Start(info)?.Dispose();
             await Task.Delay(1000); RefreshStatus();
         }
-        catch (Exception e) { ErrorBanner.Text = "Recorder could not start: " + e.Message; }
+        catch (Exception e) { ObserveError("recorder-start", "Couldn't start capture", e.ToString(), "Try again", () => _ = EnsureRecorder()); }
         finally { _reconnecting = false; }
     }
     internal Task StartShutdownProbe() => EnsureRecorder(false);
@@ -643,12 +605,6 @@ public partial class MainWindow : Window
     {
         if (!await Command(_status.Error != null ? "retry" : _status.Armed ? "disarm" : "arm")) await EnsureRecorder();
     }
-    private void ShowToast(string message)
-    {
-        ToastText.Text = message; Toast.Visibility = Visibility.Visible; _toastTimer.Stop(); _toastTimer.Start();
-        System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(ToastText)?.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
-    }
-    private void DismissToastClick(object sender, RoutedEventArgs e) { Toast.Visibility = Visibility.Collapsed; _toastTimer.Stop(); }
     private async void SaveMomentClick(object sender, RoutedEventArgs e)
         => ShowToast(await Command("save") && _status.Recording ? "Moment requested. Echo will keep the action and its ending." : "Manual moments are available while League is recording.");
     private void AudioRowClick(object sender, MouseButtonEventArgs e)
@@ -854,7 +810,8 @@ internal sealed class ClipItem : INotifyPropertyChanged
         || Clip.EventIds == null && Label.Contains(name, StringComparison.OrdinalIgnoreCase);
     public string Label => Clip.Label;
     public bool IsReady => Session.EndedAt != null && !Clip.VideoUnavailable && File.Exists(Clip.Path) && !Clip.Path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && (!Session.PreparationPending || WholeMatch);
-    public string StateLabel => Session.EndedAt == null ? "Recording" : Missing ? "File missing" : !IsReady ? "Preparing…" : "";
+    public bool PreparationFailed => Session.Error?.StartsWith("Clip preparation", StringComparison.Ordinal) == true;
+    public string StateLabel => Session.EndedAt == null ? "Recording" : PreparationFailed ? "Needs attention" : Missing ? "File missing" : !IsReady ? "Preparing…" : "";
     public Visibility StateVisibility => StateLabel.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     private IReadOnlyList<Moment>? _events;
     private IReadOnlyList<Moment> Events => _events ??= Session.Moments.Where(m => Clip.EventIds != null
@@ -887,8 +844,8 @@ internal sealed class ClipItem : INotifyPropertyChanged
         {
             if (_thumbnail != null && _thumbnail.TryGetTarget(out var cached)) return cached;
             if (_thumbnailPath == null || !File.Exists(_thumbnailPath)) return null;
-            try { var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 480; bitmap.UriSource = new Uri(_thumbnailPath); bitmap.EndInit(); bitmap.Freeze(); _thumbnail = new(bitmap); return bitmap; }
-            catch (Exception e) when (e is IOException or NotSupportedException) { return null; }
+            try { var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 480; using var stream = new FileStream(_thumbnailPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); _thumbnail = new(bitmap); return bitmap; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException) { return null; }
         }
     }
     public ClipItem(Session session, MediaClip clip, string? thumbnail, bool wholeMatch = false) { Session = session; Clip = clip; _thumbnailPath = thumbnail; WholeMatch = wholeMatch; }
