@@ -50,6 +50,11 @@ internal static class Supervisor
             var settings = paths.LoadSettings();
             var folder = Path.Combine(settings.OutputDirectory, status.SessionId);
             var file = Path.Combine(folder, "session.json");
+            var queue = Path.Combine(paths.Root, "preparation", status.SessionId + ".json");
+            var queued = JsonStore.Read<PreparationJob>(queue) ?? JsonStore.Read<PreparationJob>(queue + ".failed");
+            // Finalization may have reached the profile but not the recording folder.
+            // Let preparation restore that exact snapshot instead of estimating it again.
+            if (queued?.FinalizedSession != null && string.Equals(queued.Metadata, file, StringComparison.OrdinalIgnoreCase)) return;
             var session = JsonStore.Read<Session>(file);
             if (session == null || session.EndedAt != null) return;
             session.State = "Interrupted"; session.EndedAt = DateTimeOffset.UtcNow; session.Duration = status.ElapsedSeconds;
@@ -73,8 +78,9 @@ internal static class Supervisor
                 try { session.RecordingPath = full.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) ? MediaTools.Remux(full) : full; session.Duration = MediaTools.Duration(session.RecordingPath); }
                 catch (Exception) { session.RecordingPath = full; }
             }
+            session.PreparationPending = true;
+            MediaPreparation.Enqueue(paths, file, session.Id, session);
             JsonStore.Write(file, session);
-            session.PreparationPending = true; JsonStore.Write(file, session); MediaPreparation.Enqueue(paths, file, session.Id);
         }
         catch (Exception) { /* Recovery must not remove or overwrite any original media. */ }
     }

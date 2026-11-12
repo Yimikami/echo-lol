@@ -192,6 +192,54 @@ Test("missing replay coverage is rejected before replacing original clips", () =
 Test("force flush clamps unavailable tail", () => { var p = new ReplayScheduler(Settings()); p.Add(new(1, MomentKind.Kill, 20, 20)); Check(p.TakeDue(22, true)?.End == 22); Check(p.Pending.Count == 0); });
 Test("long fight is split before buffer eviction", () => { var p = new ReplayScheduler(Settings()); for (int i = 20; i <= 45; i += 5) p.Add(new(i, MomentKind.Kill, i, i)); var part = p.TakeDue(42); Check(part != null && part.Start == 5 && part.End == 42); Check(p.Pending.Single().Start == 41); Check(p.TakeDue(53) != null); });
 Test("atomic session roundtrip", () => { var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-tests-" + Guid.NewGuid().ToString("N")); try { var path = Path.Combine(folder, "session.json"); var session = new Session(); JsonStore.Write(path, session); Check(JsonStore.Read<Session>(path)?.Id == session.Id); Check(!File.Exists(path + ".tmp")); } finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); } });
+Test("metadata replacement recovers when a Windows reader releases its short lock", () =>
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-lock-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var path = Path.Combine(folder, "session.json");
+        JsonStore.Write(path, new Session { Champion = "Before" });
+        using var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var release = Task.Run(async () => { await Task.Delay(100); reader.Dispose(); });
+        JsonStore.Write(path, new Session { Champion = "After" });
+        release.GetAwaiter().GetResult();
+        Check(JsonStore.Read<Session>(path)?.Champion == "After" && Directory.GetFiles(folder, "*.tmp").Length == 0);
+    }
+    finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+});
+Test("persistent metadata lock preserves the original and fails within a bounded time", () =>
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-lock-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var path = Path.Combine(folder, "session.json");
+        JsonStore.Write(path, new Session { Champion = "Original" });
+        using var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        Exception? failure = null; var clock = System.Diagnostics.Stopwatch.StartNew();
+        try { JsonStore.Write(path, new Session { Champion = "Replacement" }); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { failure = error; }
+        Check(failure != null && clock.Elapsed < TimeSpan.FromSeconds(5) && failure.Message.Contains("session.json") &&
+            JsonStore.Read<Session>(path)?.Champion == "Original" && Directory.GetFiles(folder, "*.tmp").Length == 0);
+    }
+    finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+});
+Test("read-only metadata is not silently changed or bypassed", () =>
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var folder = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "echo-readonly-" + Guid.NewGuid().ToString("N"));
+    var path = Path.Combine(folder, "session.json");
+    try
+    {
+        JsonStore.Write(path, new Session { Champion = "Original" }); File.SetAttributes(path, FileAttributes.ReadOnly);
+        bool denied = false;
+        try { JsonStore.Write(path, new Session { Champion = "Replacement" }); }
+        catch (UnauthorizedAccessException) { denied = true; }
+        Check(denied && JsonStore.Read<Session>(path)?.Champion == "Original" && File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly));
+    }
+    finally { if (File.Exists(path)) File.SetAttributes(path, FileAttributes.Normal); if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+});
 void LibraryFixture(Action<string, string, string, Session> body)
 {
     var root = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "library-test-" + Guid.NewGuid().ToString("N")));

@@ -4,31 +4,59 @@ namespace Echo.Recorder;
 
 internal static class MediaPreparation
 {
-    private sealed record Job(string Metadata);
-    public static void Enqueue(HostPaths paths, string metadata, string id) => JsonStore.Write(Path.Combine(paths.Root, "preparation", id + ".json"), new Job(metadata));
+    public static void Enqueue(HostPaths paths, string metadata, string id, Session? finalized = null) =>
+        JsonStore.Write(Path.Combine(paths.Root, "preparation", id + ".json"), new PreparationJob(metadata, FinalizedSession: finalized));
     public static void TakeOne(HostPaths paths, Func<bool> cancel)
     {
         var queue = Path.Combine(paths.Root, "preparation");
         if (!Directory.Exists(queue) || cancel()) return;
         var file = Directory.EnumerateFiles(queue, "*.json").FirstOrDefault(); if (file == null) return;
+        PreparationJob? job = null;
         try
         {
-            var job = JsonStore.Read<Job>(file);
-            if (job == null || !File.Exists(job.Metadata)) { File.Move(file, file + ".done", true); return; }
+            job = JsonStore.Read<PreparationJob>(file);
+            if (job == null) throw new InvalidDataException("The preparation job could not be read.");
+            File.Delete(file + ".failed");
+            if (job.FinalizedSession is { } finalized)
+            {
+                JsonStore.Write(job.Metadata, finalized);
+                job = job with { FinalizedSession = null };
+                JsonStore.Write(file, job);
+            }
             Prepare(job.Metadata, cancel); File.Move(file, file + ".done", true);
         }
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
-            Console.Error.WriteLine("Clip preparation retained the original: " + e.Message);
-            try { var job = JsonStore.Read<Job>(file); if (job != null && JsonStore.Read<Session>(job.Metadata) is { } session) { session.PreparationPending = false; session.Error = "Clip preparation needs attention: " + e.Message; JsonStore.Write(job.Metadata, session); } File.Move(file, file + ".failed", true); }
-            catch (IOException) { }
+            Console.Error.WriteLine("Clip preparation retained the original: " + e);
+            try
+            {
+                if (job != null && JsonStore.Read<Session>(job.Metadata) is { } session)
+                {
+                    session.PreparationPending = false;
+                    session.Error = "Clip preparation needs attention: " + e.Message;
+                    JsonStore.Write(job.Metadata, session);
+                }
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            { Console.Error.WriteLine("Could not update preparation metadata: " + failure); }
+            // Keep the failure in the profile even if the recording folder itself is inaccessible.
+            try
+            {
+                if (job != null) JsonStore.Write(file, job with { Error = e.Message });
+                File.Move(file, file + ".failed", true);
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            { Console.Error.WriteLine("Could not retain preparation job: " + failure); }
         }
     }
     internal static void Prepare(string metadata, Func<bool> cancel)
     {
-        var session = JsonStore.Read<Session>(metadata) ?? throw new IOException("Session metadata is unavailable.");
-        if (session.EndedAt == null) return;
+        var session = JsonStore.Read<Session>(metadata) ?? throw new IOException($"The recording metadata is unavailable: '{metadata}'.");
+        if (session.EndedAt == null) throw new IOException($"This recording has not been finalized: '{metadata}'.");
+        session.PreparationPending = true;
+        if (session.Error?.StartsWith("Clip preparation", StringComparison.Ordinal) == true) session.Error = null;
+        JsonStore.Write(metadata, session);
         var folder = Path.GetDirectoryName(metadata)!; var options = session.RecordingOptions ?? new EchoSettings();
         if (session.Mode == RecordingMode.Clips) AssembleFights(metadata, session, folder, cancel);
         if (session.RecordingPath is { } raw && raw.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) && File.Exists(raw))

@@ -205,7 +205,10 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
                 foreach (var range in timeline.Ranges)
                     session.Clips.Add(new(Guid.NewGuid().ToString("N"), match, range.Start, Math.Min(range.End, session.Duration), range.Label, true) { EventIds = range.Moments.Select(m => m.EventId).ToArray() });
             session.PreparationPending = true;
-            JsonStore.Write(metadata, session); MediaPreparation.Enqueue(paths, metadata, session.Id);
+            // Retain the final event list and end time in the profile before touching a
+            // recording folder that may have become locked or unavailable at match end.
+            MediaPreparation.Enqueue(paths, metadata, session.Id, session);
+            JsonStore.Write(metadata, session);
             Publish(_status with { Recording = false, State = "Preparing clips" });
             engine.Dispose(); // Each native worker has exactly one capture lifecycle.
         }

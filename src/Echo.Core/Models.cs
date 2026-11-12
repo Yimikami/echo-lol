@@ -198,6 +198,8 @@ public sealed record RecorderStatus
     public DateTimeOffset UpdatedAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
+public sealed record PreparationJob(string Metadata, string? Error = null, Session? FinalizedSession = null);
+
 public static class JsonStore
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -218,8 +220,26 @@ public static class JsonStore
         try
         {
             File.WriteAllText(temp, JsonSerializer.Serialize(value, Options));
-            File.Move(temp, path, true);
+            // A short-lived reader without delete sharing (including preview/indexing tools)
+            // can make Windows report access denied during an otherwise permitted replacement.
+            for (int attempt = 0; ; attempt++)
+            {
+                try { File.Move(temp, path, true); break; }
+                catch (Exception ex) when (attempt < 3 && IsTransientReplacement(ex))
+                { Thread.Sleep(60 << attempt); }
+            }
         }
-        finally { File.Delete(temp); }
+        catch (UnauthorizedAccessException error)
+        { throw new UnauthorizedAccessException($"Could not update '{path}': {error.Message}", error); }
+        catch (IOException error)
+        { throw new IOException($"Could not update '{path}': {error.Message}", error); }
+        finally
+        {
+            // Cleanup must not replace the original, useful destination error.
+            try { File.Delete(temp); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
+    private static bool IsTransientReplacement(Exception error) =>
+        (error is IOException or UnauthorizedAccessException) && ((error.HResult & 0xffff) is 5 or 32 or 33);
 }
