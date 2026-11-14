@@ -213,7 +213,7 @@ public static class JsonStore
         catch (FileNotFoundException) { return default; }
         catch (DirectoryNotFoundException) { return default; }
     }
-    public static void Write<T>(string path, T value)
+    public static void Write<T>(string path, T value, bool retryReplacement = true)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -225,7 +225,7 @@ public static class JsonStore
             for (int attempt = 0; ; attempt++)
             {
                 try { File.Move(temp, path, true); break; }
-                catch (Exception ex) when (attempt < 3 && IsTransientReplacement(ex))
+                catch (Exception ex) when (retryReplacement && attempt < 3 && IsTransientReplacement(ex))
                 { Thread.Sleep(60 << attempt); }
             }
         }

@@ -13,10 +13,18 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
     private double _lastWall, _lastCpu, _cpu;
     private bool _armed = initiallyArmed;
+    private bool _statusWriteFailed;
     private string? _shortcut, _shortcutError;
     public void ShortcutState(string? shortcut, string? error) { Volatile.Write(ref _shortcut, shortcut); Volatile.Write(ref _shortcutError, error); }
-    private RecorderStatus _status = (JsonStore.Read<RecorderStatus>(paths.Status) ?? new()) with { Recording = false };
+    private RecorderStatus _status = ReadInitialStatus(paths);
     public void Enqueue(string command) => _commands.Enqueue(command);
+
+    private static RecorderStatus ReadInitialStatus(HostPaths paths)
+    {
+        try { return (JsonStore.Read<RecorderStatus>(paths.Status) ?? new()) with { Recording = false }; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        { return new() { UpdatedAt = DateTimeOffset.MinValue }; }
+    }
 
     public async Task ServeAsync()
     {
@@ -278,6 +286,20 @@ internal sealed class RecorderHost(HostPaths paths, CancellationToken cancellati
         _lastCpu = cpu; _lastWall = wall;
         _status = status with { ManualShortcut = Volatile.Read(ref _shortcut), ShortcutError = Volatile.Read(ref _shortcutError), CpuPercent = Math.Round(_cpu, 2), WorkingSetMegabytes = Math.Round(_process.WorkingSet64 / 1048576d, 1),
             PrivateMegabytes = Math.Round(_process.PrivateMemorySize64 / 1048576d, 1), UpdatedAt = DateTimeOffset.UtcNow };
-        JsonStore.Write(paths.Status, _status);
+        try
+        {
+            // Status is a replaceable snapshot, not recording data. Do not stall the
+            // capture loop or end a match when another process locks this file.
+            JsonStore.Write(paths.Status, _status, retryReplacement: false);
+            if (_statusWriteFailed) Console.Error.WriteLine($"{DateTimeOffset.Now:O} Recorder status file is writable again: '{paths.Status}'.");
+            _statusWriteFailed = false;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // The command pipe continues serving the latest in-memory status. The
+            // next normal heartbeat retries disk publication; log only once per outage.
+            if (!_statusWriteFailed) Console.Error.WriteLine($"{DateTimeOffset.Now:O} Recorder status update skipped; capture is unchanged: {error}");
+            _statusWriteFailed = true;
+        }
     }
 }

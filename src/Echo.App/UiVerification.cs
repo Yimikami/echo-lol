@@ -244,6 +244,7 @@ public partial class MainWindow
         }
         finally { probe.Close(); }
         await VerifyNotifications(output, Check, render);
+        await VerifyStatusPublication(output, Check);
         File.WriteAllLines(Path.Combine(output, "checks.txt"), checks);
     }
     internal async Task VerifyLibrarySelection(string output, Action<string, bool> check)

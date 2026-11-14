@@ -23,7 +23,8 @@ public partial class MainWindow : Window
     private readonly HostPaths _paths;
     private readonly bool _startRecorder;
     private EchoSettings _settings;
-    private RecorderStatus _status = new();
+    private RecorderStatus _status = new() { UpdatedAt = DateTimeOffset.MinValue };
+    private bool _pollingRecorderStatus;
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly List<ClipItem> _items = [];
@@ -97,37 +98,48 @@ public partial class MainWindow : Window
         UpdateInputState(position);
         if (_playing && position >= Timeline.SelectionEnd) SetPlaying(false);
     }
+    private static bool StatusIsFresh(RecorderStatus? status) => status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8);
+    private RecorderStatus? LatestStatus(RecorderStatus? fromDisk) => fromDisk != null && fromDisk.UpdatedAt >= _status.UpdatedAt ? fromDisk : _status;
     private bool CaptureActive()
     {
         RecorderStatus? status;
-        try { status = JsonStore.Read<RecorderStatus>(_paths.Status); }
+        try { status = LatestStatus(JsonStore.Read<RecorderStatus>(_paths.Status)); }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { status = _status; }
-        return status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8) && (status.Recording || status.State == "Starting recording");
+        return StatusIsFresh(status) && (status!.Recording || status.State == "Starting recording");
     }
     private void RefreshStatus()
     {
-        try
-        {
-            var status = JsonStore.Read<RecorderStatus>(_paths.Status);
-            bool fresh = status != null && DateTimeOffset.UtcNow - status.UpdatedAt < TimeSpan.FromSeconds(8);
-            _status = fresh ? status! : new() { State = "Recorder offline", UpdatedAt = DateTimeOffset.MinValue };
-            CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
-            CaptureGlyph.Kind = _status.Armed ? "Pause" : "Play";
-            RecorderLabel.Text = !fresh ? "Offline" : _status.Recording ? "REC" : _status.Armed ? "Auto" : "Paused";
-            ClearObservedError("status-read");
-            if (fresh) ClearObservedError("recorder-start");
-            ObserveError("capture", "Capture needs attention", _status.Error, "Try again", () => CaptureClick(this, new()));
-            ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
-            ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
-            QuickExportButton.IsEnabled=ExportButton.IsEnabled;
-            RecapButton.Visibility = _selected is { WholeMatch: true } match && match.Session.Moments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            RecapButton.IsEnabled = ExportButton.IsEnabled && !_libraryBusy && _selected?.Session.PreparationPending == false;
-            ExportButton.ToolTip = CaptureActive() ? "Export is available after the match." : "Save the selected range as a new MP4";
-            ExportHint.Text = CaptureActive() ? "Finish your match to export clips." : "Save your selection as a new MP4.";
-            DeleteButton.IsEnabled = _selected != null && !_exporting;
-            RevealButton.IsEnabled = _selected != null;
-        }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { ObserveError("status-read", "Couldn't read capture status", e.ToString(), "Try again", RefreshStatus); }
+        RecorderStatus? fromDisk = null;
+        Exception? readError = null;
+        try { fromDisk = JsonStore.Read<RecorderStatus>(_paths.Status); }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { readError = ex; }
+        var status = LatestStatus(fromDisk);
+        bool fresh = StatusIsFresh(status);
+        _status = fresh ? status! : new() { State = "Recorder offline", UpdatedAt = DateTimeOffset.MinValue };
+        CaptureButton.ToolTip = !fresh ? "Reconnect capture" : _status.Error != null ? "Retry capture: " + _status.Error : _status.Armed ? "Automatic capture is on. Click to pause." : "Resume automatic capture";
+        CaptureGlyph.Kind = _status.Armed ? "Pause" : "Play";
+        RecorderLabel.Text = !fresh ? "Offline" : _status.Recording ? "REC" : _status.Armed ? "Auto" : "Paused";
+        if (readError != null && !fresh) ObserveError("status-read", "Couldn't read capture status", readError.ToString(), "Try again", RefreshStatus);
+        else ClearObservedError("status-read");
+        if (fresh) ClearObservedError("recorder-start");
+        ObserveError("capture", "Capture needs attention", _status.Error, "Try again", () => CaptureClick(this, new()));
+        ShortcutMessage.Text = _status.ShortcutError ?? (_status.ManualShortcut == _settings.ManualShortcut && _settings.ManualShortcut.Length > 0 ? "Active" : "");
+        ExportButton.IsEnabled = _selected != null && !CaptureActive() && !_exporting && _duration > 0;
+        QuickExportButton.IsEnabled=ExportButton.IsEnabled;
+        RecapButton.Visibility = _selected is { WholeMatch: true } match && match.Session.Moments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RecapButton.IsEnabled = ExportButton.IsEnabled && !_libraryBusy && _selected?.Session.PreparationPending == false;
+        ExportButton.ToolTip = CaptureActive() ? "Export is available after the match." : "Save the selected range as a new MP4";
+        ExportHint.Text = CaptureActive() ? "Finish your match to export clips." : "Save your selection as a new MP4.";
+        DeleteButton.IsEnabled = _selected != null && !_exporting;
+        RevealButton.IsEnabled = _selected != null;
+        if (!StatusIsFresh(fromDisk) && _startRecorder) _ = PollRecorderStatus();
+    }
+    private async Task PollRecorderStatus()
+    {
+        if (_pollingRecorderStatus || _closing || App.IsExiting) return;
+        _pollingRecorderStatus = true;
+        try { if (await Command("status") && !_closing) RefreshStatus(); }
+        finally { _pollingRecorderStatus = false; }
     }
     private static string? FindMatchPoster(string folder, Session session) => new[] { Path.Combine(folder, "match.jpg") }.Concat(session.Clips.Select(c => c.ThumbnailPath ?? Path.Combine(folder, c.Id + ".jpg"))).FirstOrDefault(File.Exists);
     private void ApplyFilter(bool resetPage = false)
