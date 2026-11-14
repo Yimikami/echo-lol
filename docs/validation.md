@@ -2,6 +2,13 @@
 
 This ledger separates implemented behavior, fixture evidence and live-game acceptance.
 
+## 0.3.2 recording reliability
+
+- Release build: zero warnings and errors. **105 core checks** and **131 offscreen Windows UI/recorder checks** passed before the version bump.
+- Actual Windows file locks exercised the recorder's status publisher and command pipe. Failed status writes leave recording active, skip retry delays in the capture loop, retain live status for the UI and recover on the next heartbeat after access returns. Unreadable startup snapshots and real capture errors are covered separately.
+- Preparation tests cover retained final session snapshots, failed-job recovery, retry without losing event data, bounded metadata replacement retries and catalog refresh after a locked file becomes readable. Notification checks cover dismiss/deduplication, recovery, expanded details and playback-control placement.
+- These checks do not replace a new live League match or an FPS measurement. CI build/core checks and installer installation/uninstallation smoke tests run for the release tag.
+
 ## Completed locally
 
 - Core event/configuration/planning tests: **66 passed**. Covers identity aliases, event timestamps, multiple events per poll, replay deduplication, stale events, late-start baseline, clock reset, malformed data, configurable capture kinds, overlapping ranges, tail timing, force flush, long-fight segmentation and atomic sidecars. Also covers three-second lead-ins, replay-origin and discontinuous segment mapping, trim bounds, shared recording deletion, recycling rollback, active/out-of-library protection, shortcut validation and actual-state mask intervals.
